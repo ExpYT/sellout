@@ -158,6 +158,9 @@
   button:active{transform:scale(.97);}
   .tabPane.on{display:block; animation:fadeUp .22s ease;}
   @keyframes fadeUp{from{opacity:0; transform:translateY(5px);} to{opacity:1; transform:none;}}
+  .stageChip{font-family:'Archivo Black'; font-size:10px; padding:4px 8px; border:1px solid var(--line); color:var(--dim); letter-spacing:.05em;}
+  .stageChip.on{background:var(--red); border-color:var(--red); color:#fff;}
+  .stageChip.done{color:var(--gold); border-color:var(--gold); cursor:pointer;}
   .stashBtn{background:none; border:1px solid var(--gold); color:var(--gold); font-size:10px; padding:2px 7px; margin-left:6px; font-family:'Archivo Black';}
   .stashBtn:hover{background:var(--gold); color:#000;}
 
@@ -227,6 +230,8 @@
       <h2>Design this week's drop</h2>
       <div id="collexBox" style="display:none"></div>
       <div id="designForm">
+      <div id="stageChips" style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap"></div>
+      <div id="stage1">
       <div id="prodGrid"></div>
       <div class="frow">
         <label>Concept</label>
@@ -238,6 +243,12 @@
         <input id="dropName" type="text" maxlength="26" spellcheck="false">
         <button id="diceBtn" title="random name">🎲</button>
       </div>
+      <button class="bigBtn" id="s1Next">CONTINUE → THE MAKE</button>
+      </div>
+      <div id="stage2" style="display:none"><div id="makeOpts"></div></div>
+      <div id="stage3" style="display:none"><div id="buzzOpts"></div><div id="buzzResult" style="margin-top:8px"></div></div>
+      <div id="stage4" style="display:none">
+      <div id="pipeSummary" style="border:1px dashed var(--gold);padding:8px 12px;margin-bottom:12px;font-size:12px"></div>
       <div class="frow">
         <label>Run size</label>
         <input type="range" id="qtySlider" min="25" max="100" step="5">
@@ -255,6 +266,7 @@
       </div>
       <div id="readout"></div>
       <button class="bigBtn" id="dropBtn">DROP IT</button>
+      </div>
       <button class="bigBtn" id="collexBtn" style="display:none;background:var(--panel2);color:var(--gold);border:2px solid var(--gold);margin-top:8px">START A CAPSULE COLLECTION — $800 · 3 WEEKS</button>
       </div>
     </div>
@@ -379,6 +391,17 @@ const TIERS = [
   {name:'NATIONAL',    mult:2.3, hypeReq:50, repReq:3},
   {name:'GLOBAL',      mult:3.5, hypeReq:75, repReq:5},
 ];
+const MAKES = [
+  {id:'cutrate',  name:'CUT-RATE BLANKS',   desc:'Cost ×0.7. Stitching roulette — QC disasters happen. Production crew helps.', costMult:0.7,  makeQ:0.85},
+  {id:'standard', name:'STANDARD BLANKS',   desc:'Cost ×1. Reliable, unremarkable.', costMult:1,    makeQ:1},
+  {id:'premium',  name:'PREMIUM CUT & SEW', desc:'Cost ×1.45. Heavier fabric, better fit — resale loves it.', costMult:1.45, makeQ:1.15, resaleBonus:0.3},
+];
+const ROLLOUTS = [
+  {id:'silent',   name:'SILENT DROP',    cost:0,    desc:'No warning. Sometimes mystery is the marketing. Usually it isn\'t.'},
+  {id:'teaser',   name:'CRYPTIC TEASER', cost:250,  desc:'Blurred pics, a date, nothing else. The Plug makes this land.'},
+  {id:'lookbook', name:'LOOKBOOK SHOOT', cost:900,  desc:'Real photography. The piece looks like money. Small resale bump.'},
+  {id:'seed',     name:'CELEB SEEDING',  cost:2000, req:1, desc:'Get it on someone famous the night before. Might explode. Might vanish.'},
+];
 const PROMO_PITCH = [
   '',
   'The city\'s biggest boutique wants proof you\'re real: an exclusive drop that sells out. Word travels fast — so does failure.',
@@ -447,7 +470,7 @@ function newGame(label){
     lastTypeId:null, typeStreak:0, upgrades:{}, debtWeeks:0,
     crew:{designer:null, plug:null, production:null},
     collection:null, pendingConcept:null,
-    tier:0, promo:null, promoCooldown:0, deals:[],
+    tier:0, promo:null, promoCooldown:0, deals:[], pipe:null,
     trendHot:hot, trendCold:pick(TYPES.filter(t=>t.id!==hot)).id,
     stock:null,               // {name,type,units,price}
     drops:[],                 // archive
@@ -568,7 +591,7 @@ function render(){
   el('rankChip').textContent = '#'+myRank()+' HEAT';
   el('stRep').textContent = S.rep+'★';
   el('tierChip').textContent = TIERS[S.tier||0].name + (S.promo==='armed'?' ⚡':'');
-  renderProds(); syncSliderBounds(); renderSliders(); renderChart(); renderFeed(); renderMkt(); renderCrew(); renderCollex(); renderHQ(); renderArchive(); renderTicker();
+  renderProds(); syncSliderBounds(); renderSliders(); renderChart(); renderFeed(); renderMkt(); renderCrew(); renderCollex(); renderPipe(); renderHQ(); renderArchive(); renderTicker();
 }
 function renderProds(){
   const g = el('prodGrid'); g.innerHTML='';
@@ -606,9 +629,11 @@ function renderSliders(){
   el('qtyVal').textContent = qty+' pcs';
   el('priceVal').textContent = fmt$(price);
   el('stashVal').textContent = stash? stash+' pcs 🔐' : 'none';
-  const prodCost = unitCost(selType)*qty;
+  const P = S.pipe || {};
+  const prodCost = unitCost(selType)*(P.make? P.make.costMult:1)*qty;
   const relC = S.collection && S.collection.ready? S.collection : null;
-  const hintQ = relC? (0.8 + relC.quality*0.25)*1.5 : (S.pendingConcept? S.pendingConcept.hintQ : 0.9);
+  const hintQ = relC? (0.8 + relC.quality*0.25)*1.5
+    : (S.pendingConcept? S.pendingConcept.hintQ : 0.9) * (P.make? P.make.makeQ:1) * (P.buzz? P.buzz.mult:1);
   const [lo,hi] = estDemand(selType, price, hintQ);
   const afford = S.cash >= prodCost;
   el('conceptShow').innerHTML = S.pendingConcept
@@ -630,8 +655,6 @@ function renderSliders(){
   el('dropBtn').textContent = S.stock!==null ? 'CLEAR OLD STOCK FIRST (ARCHIVE TAB)'
     : !afford? 'CAN’T AFFORD THIS RUN'
     : relC? '👑 RELEASE '+relC.name : 'DROP IT';
-  el('collexBtn').style.display = (S.hype>=25 && !S.collection)? 'block':'none';
-  el('collexBtn').disabled = S.cash < 800;
 }
 function myRank(){
   return 1 + S.rivals.filter(r=>r.hype > S.hype).length;
@@ -782,15 +805,17 @@ function doDrop(){
   const stash = Math.min(+el('stashSlider').value, Math.max(0, qty-20));
   const avail = qty - stash;
   const relC = S.collection && S.collection.ready? S.collection : null;
+  const P = S.pipe || {};
   const name = relC? relC.name : (el('dropName').value.trim() || randDropName()).toUpperCase();
   const type = selType;
-  const cost = unitCost(type)*qty;
+  const cost = unitCost(type)*(P.make? P.make.costMult:1)*qty;
   if(S.cash < cost || S.stock) return;
   S.cash -= cost;
   const q = relC? (0.8 + relC.quality*0.25)*1.5
-          : S.pendingConcept? S.pendingConcept.q
-          : rand(0.55,1.25);
-  const {demand, viral} = rollDemand(type, price, q);
+          : (S.pendingConcept? S.pendingConcept.q : rand(0.55,1.25)) * (P.make? P.make.makeQ:1) * (P.buzz? P.buzz.mult:1);
+  let {demand, viral} = rollDemand(type, price, q);
+  const disaster = !relC && P.disaster;
+  if(disaster) demand = Math.round(demand*0.7);
   S.flags.leaked = false;
   S.flags.costSpike = false;
   const fullName = relC? name : `${name} ${type.name}`;
@@ -802,7 +827,7 @@ function doDrop(){
     sold = avail;
     const ratio = demand/avail;
     hypeD = clamp(Math.round((2 + 4*Math.log2(ratio) + Math.min(6, avail/80)) * (1 - S.hype/140)), 1, 15);
-    resale = Math.min(8, 1 + (ratio-1)*0.55);
+    resale = Math.min(8, 1 + (ratio-1)*0.55 + ((P.make&&P.make.resaleBonus)||0) + ((P.buzz&&P.buzz.resaleBonus)||0));
     const speed = ratio>=3?'in 11 seconds':ratio>=2?'in 4 minutes':ratio>=1.3?'within the hour':'by end of day';
     S.cash += sold*price;
     S.hype = clamp(S.hype+hypeD, 0, 100);
@@ -865,13 +890,19 @@ function doDrop(){
     S.collection = null;
     addTicker(cls==='w'? `${S.label} CAPSULE CEMENTS THEIR NAME` : `${S.label} CAPSULE FLOPS AFTER WEEKS OF TEASING`);
   }
-  const qStars = stars(relC? Math.min(1.7, q/1.5) : q);
+  const qStars = stars(relC? Math.min(1.7, q/1.5) : clamp(q,0.5,1.7));
   html += `<br>DESIGN VERDICT: <span class="y">${qStars}</span>`;
+  if(disaster){
+    html += `<br><span class="r">🧵 QC DISASTER — crooked stitching, peeling prints. The cut-rate blanks bit back.</span>`;
+    addPost('', pick(HANDLES), quote('my {D} arrived with the print PEELING. {L} check your factory', fullName));
+    S.hype = clamp(S.hype-2, 0, 100);
+  }
   S.drops.push({name:fullName, week:S.week, qty, sold, resale, resaleNow:resale, retail:price, stash, prevResale:resale});
   S.stats.dropsCount++;
   S.stats.revenue += sold*price;
   S.stats.bestResale = Math.max(S.stats.bestResale, resale);
   S.pendingConcept = null;
+  S.pipe = null;
   el('dropName').value='';
   el('stashSlider').value = 0;
   playDropLive({name:fullName, avail, sold, ratio: avail? demand/avail:0, soldOut: demand>=avail}, ()=>{
@@ -985,6 +1016,93 @@ function doOutlet(){
   S.stock = null;
   sfx('cash');
   showModal('STOCK DUMPED', 'e', `Moved everything through the outlet. <span class="num g">+${fmt$(v)}</span> · <span class="num r">−3 hype</span>`, [{label:'NEXT WEEK →', run:endWeek}]);
+}
+
+/* ================= DROP PIPELINE ================= */
+function renderPipe(){
+  if(!S.pipe) S.pipe = {stage:1, make:null, buzz:null, buzzNote:'', disaster:false};
+  const P = S.pipe;
+  const relC = S.collection && S.collection.ready;
+  const stage = relC? 4 : P.stage;
+  const names = ['01 DESIGN','02 THE MAKE','03 ROLLOUT','04 DROP DAY'];
+  el('stageChips').innerHTML = names.map((n,i)=>
+    `<span class="stageChip${i+1===stage?' on':''}${i+1<stage?' done':''}" data-s="${i+1}">${n}</span>`).join('');
+  [...document.querySelectorAll('.stageChip')].forEach(c=>{
+    const s = +c.dataset.s;
+    if(!relC && s < stage) c.onclick = ()=>{
+      P.stage = s;
+      if(s<=2) P.make = null;
+      if(s<=3){ P.buzz = null; P.buzzNote=''; }
+      save(); render();
+    };
+  });
+  for(let i=1;i<=4;i++) el('stage'+i).style.display = (i===stage)? 'block':'none';
+  el('collexBtn').style.display = (stage===1 && S.hype>=25 && !S.collection)? 'block':'none';
+  el('collexBtn').disabled = S.cash < 800;
+  if(stage===2) renderMakeOpts();
+  if(stage===3) renderBuzzOpts();
+  if(stage===4) renderPipeSummary();
+}
+function renderMakeOpts(){
+  const box = el('makeOpts');
+  box.innerHTML = '<h2 style="font-size:14px;margin-bottom:10px">Choose the make</h2>';
+  MAKES.forEach(m=>{
+    const b = document.createElement('button'); b.className='actBtn';
+    b.innerHTML = `<span><span class="an">${m.name}</span><br><span class="ad">${m.desc}</span></span><span class="ac">${fmt$(Math.round(unitCost(selType)*m.costMult))}/u</span>`;
+    b.onclick = ()=>{
+      S.pipe.make = m;
+      S.pipe.disaster = (m.id==='cutrate') && Math.random() < Math.max(0.03, 0.15 - crewSkill('production')*0.02);
+      S.pipe.stage = 3;
+      save(); render();
+    };
+    box.appendChild(b);
+  });
+}
+function renderBuzzOpts(){
+  const box = el('buzzOpts');
+  box.innerHTML = '<h2 style="font-size:14px;margin-bottom:10px">Plan the rollout — the roll happens NOW, before you size the run</h2>';
+  const pl = crewSkill('plug');
+  ROLLOUTS.forEach(r=>{
+    if(r.req && (S.tier||0) < r.req) return;
+    const b = document.createElement('button'); b.className='actBtn';
+    b.innerHTML = `<span><span class="an">${r.name}</span><br><span class="ad">${r.desc}</span></span><span class="ac">${r.cost? fmt$(r.cost):'FREE'}</span>`;
+    b.disabled = S.cash < r.cost;
+    b.onclick = ()=>{
+      S.cash -= r.cost;
+      let mult=1, note='';
+      if(r.id==='silent'){
+        if(Math.random()<0.10){ mult=1.3; note='The silence got loud. Comment sections are theorizing.'; }
+        else { mult=0.9; note='Quiet drop, quiet interest.'; }
+      } else if(r.id==='teaser'){
+        mult = 0.95 + rand(0,0.3) + pl*0.02;
+        note = mult>1.1? 'The teaser is everywhere — screenshots, theories, tagged friends.' : 'Some pickup. Not a frenzy.';
+      } else if(r.id==='lookbook'){
+        mult = 1.1 + rand(0,0.25) + pl*0.02;
+        note = 'The lookbook makes it look like money.';
+      } else if(r.id==='seed'){
+        if(Math.random() < 0.25 + pl*0.05){ mult = rand(1.5,1.8); note = '📸 PAPPED — an A-lister wore it courtside last night. It\'s everywhere.'; addTicker(S.label+' PIECE SPOTTED COURTSIDE'); }
+        else { mult = 1.0; note = 'They kept the package. Never wore it. Money gone.'; }
+      }
+      S.pipe.buzz = {mult, resaleBonus: r.id==='lookbook'? 0.15:0};
+      S.pipe.buzzNote = note;
+      S.pipe.stage = 4;
+      sfx(mult>=1.3? 'sellout' : 'event');
+      save(); render();
+      toast('BUZZ: ' + (mult>=1.3? '🔥 LOUD' : mult>=1.05? 'WARM' : 'QUIET'));
+    };
+    box.appendChild(b);
+  });
+}
+function renderPipeSummary(){
+  const P = S.pipe;
+  if(S.collection && S.collection.ready){
+    el('pipeSummary').innerHTML = `👑 <b>${S.collection.name}</b> — quality ${stars(0.6 + S.collection.quality*0.28)} · double run size · double hype swing`;
+    return;
+  }
+  const cn = S.pendingConcept? `${S.pendingConcept.name} ${stars(S.pendingConcept.hintQ)}` : '<span class="warn">UNVETTED DESIGN ⚠</span>';
+  el('pipeSummary').innerHTML =
+    `<b style="color:var(--gold)">THE BUILD:</b> ${cn} × ${P.make? P.make.name:'?'} × BUZZ ×${P.buzz? P.buzz.mult.toFixed(2):'?'}` +
+    (P.buzzNote? `<br><span style="color:var(--dim)">${P.buzzNote}</span>`:'');
 }
 
 /* ================= SKETCHBOOK ================= */
@@ -1525,6 +1643,7 @@ function load(){
     s.promo = s.promo || null;
     s.promoCooldown = s.promoCooldown || 0;
     s.deals = s.deals || [];
+    s.pipe = s.pipe || null;
     CREW_ROLES.forEach(r=>{ const m=s.crew[r.id]; if(m){ if(m.trait===undefined) m.trait='steady'; if(m.mood===undefined) m.mood=70; } });
     if(!s.trendHot){
       s.trendHot = TYPES[1].id;
@@ -1571,6 +1690,7 @@ el('muteBtn').onclick = ()=>{
 };
 el('diceBtn').onclick = ()=>{ el('dropName').value = randDropName(); S.pendingConcept = null; renderSliders(); };
 el('sketchBtn').onclick = sketchConcepts;
+el('s1Next').onclick = ()=>{ if(!S.pipe) S.pipe={stage:1, make:null, buzz:null, buzzNote:'', disaster:false}; S.pipe.stage=2; save(); render(); };
 el('collexBtn').onclick = startCollection;
 el('dropBtn').onclick = doDrop;
 el('qtySlider').oninput = renderSliders;
