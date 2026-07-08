@@ -307,6 +307,10 @@
       <h2>🔥 Heat 100 — brand chart</h2>
       <div id="chart"></div>
     </div>
+    <div class="panel" style="margin-bottom:14px">
+      <h2>👥 Fanbase — <span id="fanArch" style="color:var(--gold)"></span></h2>
+      <div id="fanbase"></div>
+    </div>
     <div class="panel">
       <h2>The feed</h2>
       <div id="feed"></div>
@@ -474,6 +478,7 @@ function newGame(label){
     crew:{designer:null, plug:null, production:null},
     collection:null, pendingConcept:null,
     tier:0, promo:null, promoCooldown:0, deals:[], pipe:null, slots:3,
+    fans:{purist:10 + L.crowns*4, hype:6, reseller:2}, vibeHistory:[], signature:null,
     trendHot:hot, trendCold:pick(TYPES.filter(t=>t.id!==hot)).id,
     stock:null,               // {name,type,units,price}
     drops:[],                 // archive
@@ -502,7 +507,7 @@ function quote(tmpl, dropName){
 }
 
 /* ================= CORE MATH ================= */
-const audience = ()=> (40 + S.hype*16 + S.rep*6) * (S.upgrades.designer?1.12:1) * TIERS[S.tier||0].mult;
+const audience = ()=> (36 + S.hype*15 + S.rep*6) * (S.upgrades.designer?1.12:1) * TIERS[S.tier||0].mult;
 function priceFactor(type, price){
   const r = price/type.base;
   return r<=1 ? 1+(1-r)*0.5 : Math.max(0.05, 1-(r-1)*1.1);
@@ -554,13 +559,87 @@ function rerollTrends(){
   addTicker(`THE SCENE IS ALL ABOUT ${tn}S RIGHT NOW`);
   addPost('sys', null, `Trend shift: ${tn.toLowerCase()}s are in, ${TYPES.find(t=>t.id===S.trendCold).name.toLowerCase()}s are out.`);
 }
+/* ================= FANBASE ================= */
+function totalFans(){ const f=S.fans||{purist:0,hype:0,reseller:0}; return Math.round(f.purist+f.hype+f.reseller); }
+function fanArchetype(){
+  const f=S.fans; if(!f) return 'UNKNOWN';
+  const m=Math.max(f.purist,f.hype,f.reseller);
+  if(m<10) return 'NO SCENE YET';
+  if(m===f.purist) return 'CULT FOLLOWING';
+  if(m===f.hype) return 'HYPE MACHINE';
+  return 'RESELLER BAIT';
+}
+function dropVibe(){
+  if(S.collection && S.collection.ready) return '__flagship__';
+  return S.pendingConcept ? S.pendingConcept.vibe : null;
+}
+function signatureMatch(vibe){
+  if(vibe==='__flagship__') return 1.2;
+  if(!S.signature) return 1.0;               // identity still forming — quality still counts
+  return vibe===S.signature ? 1.25 : 0.5;    // in your lane vs a betrayal
+}
+function laneVibe(){ return S.signature || (S.vibeHistory && S.vibeHistory.length? S.vibeHistory[S.vibeHistory.length-1] : null); }
+function fanDemand(type, price, q){
+  const f=S.fans; if(!f) return 0;
+  const vibe=dropVibe();
+  const premium = S.pipe&&S.pipe.make&&S.pipe.make.id==='premium';
+  const buzz = S.pipe&&S.pipe.buzz? S.pipe.buzz.mult : 1;
+  const onBrand = vibe===null ? 0.75 : signatureMatch(vibe);
+  const puristSat = clamp((q/1.05)*onBrand*(premium?1.15:1), 0, 1.6);
+  const hypeSat   = clamp(trendFactor(type)*buzz*0.8, 0, 1.7);
+  const resellSat = clamp((q-0.6)*(premium?1.5:0.9), 0, 1.5);
+  return f.purist*puristSat + f.hype*hypeSat + f.reseller*resellSat;
+}
+function updateFans(c){
+  const f=S.fans; if(!f) return '';
+  const notes=[];
+  // hypebeasts: chase trends & noise, flee flops
+  if(c.soldOut){
+    const g = 1.5 + (c.viral||c.buzz>=1.4?7:c.buzz>=1.15?4:0) + (c.trendHit?3:0);
+    f.hype+=g; if(g>=6) notes.push('<span class="y">hypebeasts swarmed in</span>');
+  } else if(c.cls==='l'){ f.hype=f.hype*0.5-2; notes.push('<span class="r">hypebeasts scattered</span>'); }
+  else { f.hype-=1.5; }
+  // purists: craft + staying on-brand; the loyal core
+  if(c.onBrand>=1 && c.q>=1 && c.soldOut){ f.purist += (1.4+c.q)*(c.onBrand>=1.2?1.25:1); notes.push('<span class="g">purists feel seen</span>');
+    if(S.rep<10 && f.purist>40 && Math.random()<0.2){ S.rep=clamp(S.rep+1,0,10); notes.push('<span class="y">+1 rep from the faithful</span>'); } }
+  else if(c.onBrand<0.7){ f.purist-=3; notes.push('<span class="r">purists feel betrayed</span>'); }
+  else if(c.cls==='l'){ f.purist-=1; }
+  // resellers: only genuine flip value pulls them, and they're disloyal
+  if(c.soldOut && c.resale>=2.0){ f.reseller += 0.4 + c.resale*0.35; if(c.resale>=2.6) notes.push('resellers circling'); }
+  if(!c.soldOut){ f.reseller-=2; }
+  f.purist=clamp(f.purist,0,600); f.hype=clamp(f.hype,0,600); f.reseller=clamp(f.reseller,0,400);
+  return notes.join(' · ');
+}
+function recordSignature(vibe){
+  if(!vibe || vibe==='__flagship__') return;
+  S.vibeHistory=(S.vibeHistory||[]); S.vibeHistory.push(vibe);
+  if(S.vibeHistory.length>5) S.vibeHistory.shift();
+  const cnt={}; S.vibeHistory.forEach(v=>cnt[v]=(cnt[v]||0)+1);
+  let bv=null,bn=0; for(const k in cnt) if(cnt[k]>bn){bn=cnt[k];bv=k;}
+  if(bn>=3 && bv!==S.signature){ S.signature=bv; addPost('sys',null,`${S.label}'s signature is crystallizing: “${bv}”.`); }
+}
+function fanFitLine(){
+  if(!S.fans) return '';
+  const vibe=dropVibe();
+  const bits=[];
+  if(S.signature && vibe && vibe!=='__flagship__'){
+    if(vibe===S.signature) bits.push('<span style="color:var(--green)">on-brand — purists approve</span>');
+    else bits.push('<span class="warn">off your signature — purists uneasy</span>');
+  }
+  if(S.trendHot===selType.id) bits.push('hypebeasts want this trend');
+  if(S.pipe&&S.pipe.make&&S.pipe.make.id==='premium') bits.push('resellers eye the premium make');
+  return bits.length? '<br>👥 '+bits.join(' · ') : '';
+}
+
 function estDemand(type, price, q){
   let base = audience()*type.appeal*priceFactor(type,price)*fatigueFactor(type)*trendFactor(type)*(q||1);
+  base += fanDemand(type, price, q||1);
   if(S.flags.leaked) base*=0.75;
   return [Math.round(base*0.55), Math.round(base*1.6)];
 }
 function rollDemand(type, price, q){
   let base = audience()*type.appeal*priceFactor(type,price)*fatigueFactor(type)*trendFactor(type)*(q||1);
+  base += fanDemand(type, price, q||1);
   if(S.flags.leaked) base*=0.75;
   let d = base*rand(0.65,1.45);
   let viral = false;
@@ -605,7 +684,7 @@ function render(){
   el('rankChip').textContent = '#'+myRank()+' HEAT';
   el('stRep').textContent = S.rep+'★';
   el('tierChip').textContent = TIERS[S.tier||0].name + (S.promo==='armed'?' ⚡':'');
-  renderProds(); syncSliderBounds(); renderSliders(); renderChart(); renderFeed(); renderMkt(); renderCrew(); renderCollex(); renderPipe(); renderHQ(); renderArchive(); renderTicker();
+  renderProds(); syncSliderBounds(); renderSliders(); renderChart(); renderFanbase(); renderFeed(); renderMkt(); renderCrew(); renderCollex(); renderPipe(); renderHQ(); renderArchive(); renderTicker();
 }
 function renderProds(){
   const g = el('prodGrid'); g.innerHTML='';
@@ -664,6 +743,7 @@ function renderSliders(){
     (S.trendHot===selType.id ? ' <span style="color:var(--gold)">(🔥 trending — demand +40%)</span>'
      : S.trendCold===selType.id ? ' <span style="color:#7ad7ff">(🧊 out of season — demand −30%)</span>':'') +
     (S.promo==='armed'? `<br><span class="warn" style="color:var(--gold)">⚡ BREAKOUT CHALLENGE ARMED — THIS DROP MUST SELL OUT</span>`:'') +
+    fanFitLine() +
     `<br>Undersupply = instant sellout, hype + resale. Oversupply = a brick.`;
   const noTime = (S.slots===undefined?3:S.slots) < 2;
   el('dropBtn').disabled = !afford || S.stock!==null || noTime;
@@ -684,6 +764,25 @@ function renderChart(){
     const arrow = mv>1.2?'<span class="mv mvU">▲</span>':mv<-1.2?'<span class="mv mvD">▼</span>':'<span class="mv">·</span>';
     return `<div class="chartRow${b.me?' me':''}"><span class="pos">${i+1}</span>${arrow}<span class="cn">${b.name}</span><span class="ch">${Math.round(b.hype)}°</span></div>`;
   }).join('');
+}
+function renderFanbase(){
+  const f=S.fans; if(!f) return;
+  el('fanArch').textContent = fanArchetype()+' · '+totalFans();
+  const rows=[
+    {k:'purist',   name:'PURISTS',    col:'var(--green)', want:'craft & staying true'},
+    {k:'hype',     name:'HYPEBEASTS', col:'var(--gold)',  want:'trends & noise'},
+    {k:'reseller', name:'RESELLERS',  col:'#7ad7ff',      want:'scarcity & resale'},
+  ];
+  const max=Math.max(20, f.purist, f.hype, f.reseller);
+  el('fanbase').innerHTML = rows.map(r=>{
+    const v=Math.round(f[r.k]);
+    return `<div style="margin-bottom:7px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px"><span style="color:${r.col};font-weight:700">${r.name}</span><span style="color:var(--dim)">${v} · ${r.want}</span></div>
+      <div style="height:8px;background:var(--panel2);border:1px solid var(--line)"><div style="height:100%;width:${Math.round(100*f[r.k]/max)}%;background:${r.col};transition:width .5s ease"></div></div>
+    </div>`;
+  }).join('') + (S.signature
+    ? `<div style="font-size:11px;color:var(--dim);margin-top:8px">SIGNATURE: <b style="color:var(--txt)">${S.signature}</b> — stray from it and purists walk.</div>`
+    : `<div style="font-size:11px;color:var(--dim);margin-top:8px">No signature yet — drop the same vibe 3× to define your lane.</div>`);
 }
 function renderFeed(){
   el('feed').innerHTML = S.feed.map(p=>
@@ -914,6 +1013,12 @@ function doDrop(){
     addPost('', pick(HANDLES), quote('my {D} arrived with the print PEELING. {L} check your factory', fullName));
     S.hype = clamp(S.hype-2, 0, 100);
   }
+  // fanbase reacts — the heart of selling out vs staying true
+  const dvibe = relC ? '__flagship__' : (S.pendingConcept? S.pendingConcept.vibe : null);
+  const onBrand = dvibe===null ? 0.75 : signatureMatch(dvibe);
+  const fanNote = updateFans({soldOut: cls==='w', cls, q, resale, viral, buzz:(P.buzz?P.buzz.mult:1), onBrand, trendHit: trendFactor(type)>1});
+  recordSignature(dvibe);
+  if(fanNote) html += `<br>👥 ${fanNote}`;
   S.drops.push({name:fullName, week:S.week, qty, sold, resale, resaleNow:resale, retail:price, stash, prevResale:resale});
   S.stats.dropsCount++;
   S.stats.revenue += sold*price;
@@ -1031,6 +1136,7 @@ function doOutlet(){
   const v = stockValue(0.12);
   S.cash += v;
   S.hype = clamp(S.hype-3, 0, 100);
+  if(S.fans){ S.fans.reseller=Math.max(0,S.fans.reseller*0.6); S.fans.purist=Math.max(0,S.fans.purist-2); }
   addPost('', pick(HANDLES), quote('caught the {L} outlet dump… grail status revoked', ''));
   S.stock = null;
   sfx('cash');
@@ -1129,16 +1235,19 @@ function sketchConcepts(){
   if(S.cash < 300) return;
   S.cash -= 300;
   const sk = crewSkill('designer');
-  const opts = [0,1,2].map(()=>{
+  const lane = laneVibe();
+  const opts = [0,1,2].map((i)=>{
     const q = clamp(rand(0.6,1.45) + sk*0.05, 0.5, 1.7);
     const noise = Math.max(0.08, 1.6 - sk*0.26) * 0.25;
     const hintQ = clamp(q + rand(-noise, noise)*2, 0.5, 1.7);
-    return {name:randDropName(), q, hintQ, vibe:pick(VIBES)};
+    // first concept stays in your lane so you can build a signature on purpose
+    const vibe = (i===0 && lane)? lane : pick(VIBES);
+    return {name:randDropName(), q, hintQ, vibe};
   });
   sfx('event');
   showModal('THE SKETCHBOOK', 'e',
-    'Three concepts hit the table.' + (sk? ` Your designer (★${sk}) rates them — the better they are, the closer the read.` : ' No designer on staff — these star ratings are pure vibes.'),
-    opts.map(o=>({label:`${o.name} — “${o.vibe}” · ${stars(o.hintQ)}`, run:()=>{
+    'Three concepts hit the table.' + (sk? ` Your designer (★${sk}) rates them — the better they are, the closer the read.` : ' No designer on staff — these star ratings are pure vibes.') + (lane? ` <span style="color:var(--gold)">Top option stays in your lane (${lane}).</span>`:''),
+    opts.map((o,i)=>({label:`${o.name} — “${o.vibe}”${i===0&&lane?' 🎯':''} · ${stars(o.hintQ)}`, run:()=>{
       S.pendingConcept = o;
       el('dropName').value = o.name;
       save(); render();
@@ -1253,6 +1362,8 @@ function endWeek(){
   S.slots = 3;
   // hype decay — fame is a leaky bucket
   S.hype = clamp(S.hype - (1 + S.hype*0.055)*(S.upgrades.vault?0.7:1), 0, 100);
+  // fans drift: hypebeasts are fickle, purists are loyal, resellers wander
+  if(S.fans){ S.fans.hype = Math.max(0, S.fans.hype*0.9); S.fans.reseller = Math.max(0, S.fans.reseller*0.9); S.fans.purist = Math.max(0, S.fans.purist*0.992); }
   // flagship store moves product every week
   if(S.upgrades.flagship){
     const inc = Math.round(S.hype*60);
@@ -1419,7 +1530,8 @@ function runCardData(ending, grail){
     revenue:S.stats.revenue, peakHype:Math.round(S.stats.peakHype),
     bestRank:S.stats.bestRank, bestResale:S.stats.bestResale,
     bestDrop:(best && best.resale>1)? best.name:null, crowns:loadLegacy().crowns,
-    tier:TIERS[S.tier||0].name,
+    tier:TIERS[S.tier||0].name, archetype:fanArchetype(), fans:totalFans(),
+    signature:S.signature,
   };
 }
 function drawCard(d){
@@ -1439,6 +1551,7 @@ function drawCard(d){
   const lines = [
     `${d.tier||'LOCAL SCENE'} · ${d.weeks} weeks · ${d.drops} drops · ${fmt$(d.revenue)} total revenue`,
     `Peak hype ${d.peakHype}° · best rank #${d.bestRank} · best resale ${d.bestResale.toFixed(1)}x`,
+    `${d.archetype||''}${d.fans?' · '+d.fans+' fans':''}${d.signature?' · '+d.signature:''}`,
     d.bestDrop? `Grail piece: ${d.bestDrop}`:'',
   ];
   lines.forEach((l,i)=>{ if(l) x.fillText(l, 24, 205+i*33); });
@@ -1609,16 +1722,18 @@ const EVENTS = [
     choices:[
       {label:'SIGN IT (+$2,500/wk, −1.5 hype/wk, 6 wks)', run:()=>{
         S.deals.push({name:'WHOLESALE', weeksLeft:6, cashWk:2500, hypeWk:-1.5});
+        if(S.fans){ const lost=Math.round(S.fans.purist*0.3); S.fans.purist-=lost; S.fans.hype+=12; }
         addTicker(`${S.label} SPOTTED ON DEPARTMENT STORE RACKS`);
-        return {html:'Signed. The money is real. So is the eye-rolling.'}; }},
-      {label:'STAY UNDERGROUND (+1 rep)', run:()=>{ S.rep=clamp(S.rep+1,0,10);
-        return {cls:'w', html:'You leak the rejected contract. The scene eats it up. <span class="num y">+1 rep</span>'}; }}]},
+        return {cls:'l', html:'Signed. The money is real — but 30% of your purists just unfollowed. The mall crowd files in.'}; }},
+      {label:'STAY UNDERGROUND (+1 rep)', run:()=>{ S.rep=clamp(S.rep+1,0,10); if(S.fans) S.fans.purist+=8;
+        return {cls:'w', html:'You leak the rejected contract. The scene eats it up. <span class="num y">+1 rep</span> · purists rally'}; }}]},
   { title:'BOUTIQUE PLACEMENT', cond:()=>S.rep>=1 && (S.deals||[]).length<2,
     desc:()=>`The most respected boutique in the city offers a consignment wall: costs you ${fmt$(500)}/week in stock for 4 weeks, but the right people see it every day.`,
     choices:[
       {label:'TAKE THE WALL (−$500/wk, +1.5 hype/wk, 4 wks)', cond:()=>S.cash>=2000, run:()=>{
         S.deals.push({name:'BOUTIQUE WALL', weeksLeft:4, cashWk:-500, hypeWk:1.5});
-        return {cls:'w', html:'Your pieces now hang where taste is decided.'}; }},
+        if(S.fans) S.fans.purist+=5;
+        return {cls:'w', html:'Your pieces now hang where taste is decided. Purists notice.'}; }},
       {label:'PASS', run:()=>null}]},
   { title:'WAGE DEMAND', cond:()=>CREW_ROLES.some(r=>S.crew[r.id]),
     desc:()=>{ const e=pickCrewMember(); S._ev=e; return `${e.m.name}, your ${e.title.toLowerCase()}, wants a 40% raise. "Rivals keep sliding into my DMs."`; },
@@ -1669,6 +1784,9 @@ function load(){
     s.deals = s.deals || [];
     s.pipe = s.pipe || null;
     if(s.slots===undefined) s.slots = 3;
+    s.fans = s.fans || {purist:10, hype:6, reseller:2};
+    s.vibeHistory = s.vibeHistory || [];
+    if(s.signature===undefined) s.signature = null;
     CREW_ROLES.forEach(r=>{ const m=s.crew[r.id]; if(m){ if(m.trait===undefined) m.trait='steady'; if(m.mood===undefined) m.mood=70; } });
     if(!s.trendHot){
       s.trendHot = TYPES[1].id;
