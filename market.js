@@ -49,8 +49,8 @@ function segmentInterest(seg, col, price){
   if(col.theme===G.trend.theme)      s += (seg.id==='street'?0.2 : seg.id==='enthusiast'?0.12 : 0.05);
   if(col.product===G.trend.product)  s += (seg.id==='street'||seg.id==='casual') ? 0.12 : 0.05;
 
-  // Loyalty & reputation lift everything gently
-  s += (G.loyalty-50)/220 + (G.reputation-50)/260;
+  // Loyalty & reputation lift everything — a trusted brand converts better
+  s += (G.loyalty-50)/150 + (G.reputation-50)/220;
 
   return clamp(s, 0.05, 1.7);
 }
@@ -69,7 +69,13 @@ function simulateDrop(col, qty, price, opts){
     genuineDemand += buyers;
   });
 
-  // Event modifiers (viral moment, competitor clash, etc.)
+  // The loyal core buys almost regardless — loyalty is a demand floor
+  const loyalCore = G.followers * 0.012 * (G.loyalty/100);
+  genuineDemand += loyalCore;
+  perSegment._loyal = Math.round(loyalCore);
+
+  // Difficulty & event modifiers (viral moment, competitor clash, etc.)
+  genuineDemand *= diff().demand;
   genuineDemand *= (G.eventMods.demandMult || 1);
   // Purchase limits add friction for everyone, not just bots
   if(opts.limit==='strict') genuineDemand *= 0.93;
@@ -80,11 +86,13 @@ function simulateDrop(col, qty, price, opts){
   let resaleEst    = price * Math.pow(Math.max(0.3, scarcity), 0.75) * (0.75 + G.prestige/160);
   let resellerBuys = 0;
   if(resaleEst > price*1.25){
-    let resellerPool = reach * 0.10 * clamp((resaleEst/price - 1), 0.2, 2.2);
-    if(opts.limit==='strict') resellerPool *= 0.35;      // 1-per-customer
-    else if(opts.limit==='soft') resellerPool *= 0.65;   // 2-per-customer
-    if(G.research.raffle && opts.limit!=='none') resellerPool *= 0.7;
+    let resellerPool = reach * 0.085 * clamp((resaleEst/price - 1), 0.2, 2.2);
     resellerBuys = Math.round(resellerPool * rand(0.7,1.3));
+    // Purchase limits are a HARD cap on how much stock bots can take:
+    // no limit → up to 45% · 2-per → 30% · 1-per → 15%; raffle tightens further
+    const capFrac = opts.limit==='strict'? 0.15 : opts.limit==='soft'? 0.30 : 0.45;
+    const raffleMult = (G.research.raffle && opts.limit!=='none')? 0.65 : 1;
+    resellerBuys = Math.min(resellerBuys, Math.round(qty * capFrac * raffleMult));
   }
 
   const totalDemand = Math.round(genuineDemand) + resellerBuys;
@@ -148,17 +156,46 @@ function makeCompetitors(){
 }
 
 function tickCompetitors(){
+  const rankBefore = competitorRank();
   G.competitors.forEach(c=>{
     c.prevFollowers = c.followers;
     // gentle mean-reverting growth
-    c.followers = Math.max(200, Math.round(c.followers * rand(0.97, 1.06) + c.prestige*3));
+    c.followers = Math.max(200, Math.round(c.followers * rand(0.96, 1.06) + c.prestige*3));
     c.prestige  = clamp(c.prestige + rand(-1.2, 1.4), 1, 99);
-    // they release collections too — and soak up the scene's attention
-    if(Math.random()<0.16){
-      const sizes = ['a limited capsule','a full seasonal line','a surprise collab'];
-      feedPost('sys', null, `${c.name} just released ${pick(sizes)}. The timeline is busy.`);
-      if(Math.random()<0.5){ G.hype = clamp(G.hype-2, 0, 100); }
-      c.followers += ri(100, 800);
+    // brands make moves — some weeks they win, some they fumble
+    if(Math.random()<0.28){
+      const move = pick(['drop','viral','collab','flop','scandal']);
+      if(move==='drop'){
+        feedPost('sys', null, `${c.name} released a limited capsule. Sold out fast.`);
+        c.followers += ri(200, 900); c.prestige = clamp(c.prestige+1, 1, 99);
+        if(Math.random()<0.5) G.hype = clamp(G.hype-2, 0, 100);   // they soak up attention
+      } else if(move==='viral'){
+        feedPost('sys', null, `A ${c.name} piece went viral overnight. Their comments are chaos.`);
+        c.followers += ri(600, 2200);
+      } else if(move==='collab'){
+        const other = pick(G.competitors.filter(x=>x!==c)) || c;
+        feedPost('sys', null, `${c.name} × ${other.name} collab announced. The scene is talking.`);
+        c.followers += ri(300, 1000); other.followers += ri(200, 600);
+      } else if(move==='flop'){
+        feedPost('sys', null, `${c.name}'s new line is sitting. Markdown rumours already.`);
+        c.followers = Math.max(200, c.followers - ri(200, 900));
+        c.prestige = clamp(c.prestige-2, 1, 99);
+      } else {
+        feedPost('sys', null, `${c.name} caught in a quality scandal — peeling prints everywhere.`);
+        c.followers = Math.max(200, c.followers - ri(400, 1500));
+        c.prestige = clamp(c.prestige-4, 1, 99);
+      }
     }
   });
+  // tell the player when the leaderboard shifts around them
+  const rankAfter = competitorRank();
+  if(rankAfter < rankBefore) toast(`📈 You climbed to #${rankAfter} in the scene`, 'gold');
+  else if(rankAfter > rankBefore){
+    const passer = G.competitors.filter(c=>c.followers>G.followers).sort((a,b)=>a.followers-b.followers)[0];
+    if(passer) feedPost('sys', null, `${passer.name} just passed ${G.brand} on followers. Heads up.`);
+  }
+}
+
+function competitorRank(){
+  return 1 + G.competitors.filter(c=>c.followers > G.followers).length;
 }

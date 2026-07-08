@@ -22,10 +22,39 @@ function loadGame(){
     s.research     = s.research     || {};
     s.history      = s.history      || {followers:[s.followers||150], revenue:[]};
     s.stats        = s.stats        || {lifetimeSales:0, lifetimeRevenue:0, bestResale:0};
+    s.difficulty   = s.difficulty   || 'normal';
+    s.tut          = s.tut          || {};
+    s.botStreak    = s.botStreak    || 0;
     return s;
   }catch(e){ return null; }
 }
 
 function wipeSave(){
   try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+}
+
+/* Export the save as a downloadable JSON file. */
+function exportSave(){
+  if(!G) return;
+  const blob = new Blob([JSON.stringify(G)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = G.brand.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'_week'+G.week+'.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Save exported');
+}
+
+/* Import a save from a chosen JSON file, then reload into it. */
+function importSave(file){
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const s = JSON.parse(reader.result);
+      if(!s || !s.brand || s.week===undefined) throw new Error('bad');
+      localStorage.setItem(SAVE_KEY, JSON.stringify(s));
+      location.reload();
+    }catch(e){ toast('Not a valid save file'); }
+  };
+  reader.readAsText(file);
 }

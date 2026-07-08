@@ -42,7 +42,8 @@ function finalizeDesign(){
   const mat = MATERIALS.find(m=>m.id===d.material);
   if(mat.research && !G.research[mat.research]){ toast('That material needs research'); return; }
 
-  const quality = clamp(designQualityBase(d) + rand(-0.7, 0.9), 1, 10);
+  const quality = clamp(designQualityBase(d) + rand(-0.7, 0.9) + (G.eventMods.qualityBonus||0), 1, 10);
+  if(G.eventMods.qualityBonus) delete G.eventMods.qualityBonus;
   // Repeating last theme bores the fashion crowd
   const lastDrop = G.drops[G.drops.length-1];
   const staleTheme = lastDrop && lastDrop.theme===d.theme;
@@ -133,6 +134,7 @@ function launchDrop(){
     qty, price, sold:sim.sold, soldOut:sim.soldOut, selloutMin:sim.selloutMin,
     resale:sim.resaleFinal, resaleNow:sim.resaleFinal, quality:col.quality,
     revenue, profit: revenue - prodCost, resellerShare:sim.resellerShare,
+    leftover: sim.leftover||0,
   };
   G.drops.push(record);
   G.history.revenue.push({name:col.name, v:revenue});
@@ -143,60 +145,151 @@ function launchDrop(){
   saveGame();
 }
 
-/* Consequences ripple through every brand stat. */
-function applyDropConsequences(col, qty, price, sim, profit){
-  const reactions = [];
+/* ---------------- community reaction pools ----------------
+   Each crowd has its own voice; tone depends on the outcome.  */
+const VOICES = {
+  fanWin:      [c=>`gone in seconds. ${G.brand} does not miss`, c=>`copped the ${c.name} at the buzzer. hands still shaking`, c=>`this is why we wait on ${G.brand} drops`],
+  fanLoss:     [c=>`${c.name} still fully stocked… ${G.brand} fell off?`, c=>`no line, no frenzy. the aura is fading`, c=>`skipped this one. felt phoned in`],
+  collectorWin:[c=>`the ${c.name} is a future grail. sealed and shelved`, c=>`stitching, weight, hand-feel — proper piece. collecting these`, c=>`numbered run this small? archive material`],
+  collectorBad:[c=>`printed ${fmtN(c.qty)} units and called it "limited"? collectors see through it`, c=>`quality doesn't match the story they're telling`],
+  resellerWin: [c=>`already flipping my pair for double. thank you ${G.brand} 🤑`, c=>`carts hit. margins beautiful. see you next drop`],
+  resellerBad: [c=>`resale under retail lol. dumped mine at a loss`, c=>`no flip value. skipping ${G.brand} drops now`],
+  casualHappy: [c=>`actually got one for once!! love it`, c=>`fair price, cool ${c.productObj.name.toLowerCase()}, quick shipping. i'm a customer now`],
+  casualAngry: [c=>`${fmt$(c.price)} for a ${c.productObj.name.toLowerCase()}?? be serious`, c=>`sold out before the page loaded. why do i bother`],
+  quality:     [c=>`quality on the ${c.productObj.name.toLowerCase()} is insane. worth every dollar`, c=>`the ${MATERIALS.find(m=>m.id===c.material).name} fabric is HEAVY. premium feel`],
+  qualityBad:  [c=>`washed it once and the print cracked 💀 do better ${G.brand}`, c=>`seams already loose. this is fast fashion with better marketing`],
+  bots:        [c=>`bots took the whole ${c.name} drop. actual fans got NOTHING`, c=>`checkout was over before it started. bot city`],
+  limitsGood:  [c=>`purchase limits meant real ones actually copped. respect, ${G.brand}`],
+  stale:       [c=>`another ${c.theme} collection? we've seen this one already`],
+  resaleHype:  [c=>`resale already 2x+. should've bought two`],
+};
+function react(pool, col, hot){
+  const line = pick(VOICES[pool])(col);
+  feedPost(hot?'hot':'', pick(HANDLES), line);
+  return line;
+}
 
+/* Consequences ripple through every brand stat.
+   Everything is recorded into sim.factors so the breakdown
+   screen can explain exactly WHY the drop went how it went.  */
+function applyDropConsequences(col, qty, price, sim, profit){
+  const F = sim.factors = [];   // [label, delta-ish text, good|bad|neutral]
+  const ratio = price / col.productObj.retail;
+  const hypeAtLaunch = G.hype;  // captured before results move it
+
+  // --- sellout or not ---
   if(sim.soldOut){
     const heat = sim.totalDemand/qty;
-    G.hype = clamp(G.hype + clamp(4 + heat*3, 4, 18), 0, 100);
+    const hypeGain = clamp(4 + heat*3, 4, 18);
+    G.hype = clamp(G.hype + hypeGain, 0, 100);
     const fGain = Math.round(qty * clamp(heat*0.35, 0.2, 1.6) * (0.9+G.prestige/150));
     G.followers += fGain;
     sim.followerGain = fGain;
-    // prestige comes from quality + genuine scarcity, not volume
-    if(col.quality>=6.5 && heat>1.4) G.prestige = clamp(G.prestige + rand(1,2.4), 0, 100);
-    reactions.push([pick(HANDLES), sim.selloutMin<=2 ? `sold out in ${Math.round(sim.selloutMin*60)} seconds. i didn't even get to checkout` : `gone in ${sim.selloutMin} minutes. ${G.brand} does not miss`]);
+    F.push(['Sold out', `demand was ${heat.toFixed(1)}x your supply — scarcity did its job`, 'good']);
+    if(col.quality>=6.5 && heat>1.4){ G.prestige = clamp(G.prestige + rand(1,2.4), 0, 100); F.push(['Prestige earned', 'high quality + genuine scarcity is how legends build', 'good']); }
+    react('fanWin', col, true);
+    if(heat>1.6 && col.quality>=6) react('collectorWin', col, true);
   } else {
     const rate = sim.sold/qty;
+    const leftover = qty - sim.sold;
     G.hype = clamp(G.hype - (rate<0.5 ? 12 : 5), 0, 100);
     G.reputation = clamp(G.reputation - (rate<0.5?4:1.5), 0, 100);
     sim.followerGain = Math.round(sim.sold*0.15);
     G.followers += sim.followerGain;
-    reactions.push([pick(HANDLES), rate<0.5 ? `${col.name} still fully stocked… ${G.brand} fell off?` : `decent numbers but no sellout. the aura is fading`]);
+    sim.leftover = leftover;
+    F.push(['Did not sell out', `only ${Math.round(rate*100)}% moved — interest was ${fmtN(sim.genuineDemand)} vs ${fmtN(qty)} produced`, 'bad']);
+    F.push(['Dead stock', `${fmtN(leftover)} unsold units — ${fmt$(Math.round(leftover*col.unitCost))} of production written off`, 'bad']);
+    if(rate<0.5){ G.reputation = clamp(G.reputation-3, 0, 100); F.push(['Public flop', 'a visibly stocked "limited drop" bruises reputation', 'bad']); }
+    react('fanLoss', col, false);
+    if(qty>=1000) react('collectorBad', col, false);
   }
 
-  // Quality drives satisfaction & word of mouth
-  const satShift = (col.quality-5.5)*2.4 + (col.packagingObj.sat||0)*0.5 + empBonus('warehouse')*3;
+  // --- pricing verdict ---
+  if(ratio>1.5 && col.quality<7){
+    G.satisfaction = clamp(G.satisfaction-6, 0, 100);
+    F.push(['Overpriced', `${Math.round((ratio-1)*100)}% over suggested retail without the quality to back it`, 'bad']);
+    react('casualAngry', col, false);
+  } else if(ratio<0.9){
+    G.satisfaction = clamp(G.satisfaction+3, 0, 100);
+    F.push(['Value pricing', 'under retail — casuals feel looked after', 'good']);
+    react('casualHappy', col, false);
+  }
+
+  // --- quality verdict (refunds for genuinely bad product) ---
+  const satShift = (col.quality-5.5)*2.4 + (col.packagingObj.sat||0)*0.5 + empBonus('warehouse')*3 + (G.research.shipping?8:0);
   G.satisfaction = clamp(G.satisfaction + satShift, 0, 100);
-  if(col.quality>=7.5) reactions.push([pick(HANDLES), `quality on the ${col.productObj.name.toLowerCase()} is insane. ${MATERIALS.find(m=>m.id===col.material).name} was worth it`]);
-  if(col.quality<=3.5) reactions.push([pick(HANDLES), `washed it once and the print cracked 💀 do better ${G.brand}`]);
-
-  // Reseller share moves loyalty — real fans hate losing to bots
-  if(sim.resellerShare>0.3){
-    G.loyalty = clamp(G.loyalty - 8, 0, 100);
-    reactions.push([pick(HANDLES), `bots took the whole ${col.name} drop. actual fans got NOTHING`]);
-  } else if(sim.soldOut && col.limit!=='none'){
-    G.loyalty = clamp(G.loyalty + 4, 0, 100);
-    reactions.push([pick(HANDLES), `purchase limits meant real ones actually copped. respect, ${G.brand}`]);
+  if(col.quality>=7.5){ F.push(['Quality praised', `${col.quality}/10 — word of mouth working for you`, 'good']); react('quality', col, true); }
+  if(col.quality<=4){
+    const refunds = Math.round(sim.sold*price*0.08);
+    G.cash -= refunds; G.weekLog.expenses += refunds;
+    G.reputation = clamp(G.reputation-4, 0, 100);
+    F.push(['Refund wave', `${col.quality}/10 quality → ${fmt$(refunds)} in refunds and returns`, 'bad']);
+    react('qualityBad', col, false);
   }
-  if(sim.resaleFinal > price*2 && sim.soldOut) reactions.push([pick(HANDLES), `resale already at ${fmt$(sim.resaleFinal)}. should've bought two`]);
-  if(col.staleTheme) reactions.push([pick(HANDLES), `another ${col.theme} collection? we've seen this one already`]);
 
-  reactions.forEach(r=>feedPost(sim.soldOut?'hot':'', r[0], r[1]));
-  sim.reactions = reactions;
+  // --- resellers & bots ---
+  if(sim.resellerShare>0.3){
+    G.botStreak = (G.botStreak||0)+1;
+    const loyaltyHit = G.botStreak>=2? 14 : 8;
+    G.loyalty = clamp(G.loyalty - loyaltyHit, 0, 100);
+    F.push(['Bots fed', `resellers took ${Math.round(sim.resellerShare*100)}% of stock${G.botStreak>=2?' — SECOND drop in a row; the community is done waiting':''} (−${loyaltyHit} loyalty)`, 'bad']);
+    react('bots', col, false);
+    if(G.botStreak>=2) feedPost('hot', pick(HANDLES), `two drops straight lost to bots. ${G.brand} clearly doesn't care about real fans`);
+    react('resellerWin', col, false);
+  } else {
+    G.botStreak = 0;
+    if(sim.soldOut && col.limit!=='none'){
+      G.loyalty = clamp(G.loyalty + 4, 0, 100);
+      F.push(['Fans protected', 'purchase limits kept bots out — loyalty up', 'good']);
+      react('limitsGood', col, false);
+    }
+  }
+  if(!sim.soldOut && sim.resellerBuys>0) react('resellerBad', col, false);
+  if(sim.resaleFinal > price*2 && sim.soldOut){ F.push(['Resale heat', `flipping at ${fmt$(sim.resaleFinal)} — exclusivity is compounding`, 'good']); react('resaleHype', col, true); }
+  if(col.staleTheme){ F.push(['Stale theme', 'same theme twice in a row bored the fashion crowd', 'bad']); react('stale', col, false); }
+  if(col.theme===G.trend.theme || col.product===G.trend.product) F.push(['On trend', 'trend alignment pulled in the hype crowd', 'good']);
+  if(hypeAtLaunch<20) F.push(['Low hype at launch', 'you dropped to a quiet room — marketing before launching matters', 'bad']);
+  else if(hypeAtLaunch>=60) F.push(['Launched hot', `hype at ${Math.round(hypeAtLaunch)} put this in front of everyone`, 'good']);
 }
 
-/* Results modal after the launch animation. */
+/* Post-drop breakdown: the numbers, WHO bought, and WHY it went
+   the way it did — every factor spelled out.                    */
 function showDropResults(rec, sim, prodCost){
-  const lines = [
+  const head = [
     `<span class="stat-line">Revenue <b class="g">${fmt$(rec.revenue)}</b> · production ${fmt$(prodCost)} · net <b class="${rec.profit>=0?'g':'r'}">${fmt$(rec.profit)}</b></span>`,
-    `<span class="stat-line">Sold <b>${fmtN(rec.sold)}/${fmtN(rec.qty)}</b>${rec.soldOut? ` · sold out in <b>${rec.selloutMin<1? Math.round(rec.selloutMin*60)+'s' : rec.selloutMin+' min'}</b>`:''}</span>`,
-    `<span class="stat-line">Quality <b class="y">${rec.quality}/10</b> · resale settled at <b class="y">${fmt$(rec.resale)}</b> (${(rec.resale/rec.price).toFixed(1)}x)</span>`,
-    `<span class="stat-line">+<b class="g">${fmtN(sim.followerGain||0)}</b> followers · resellers took <b>${Math.round(sim.resellerShare*100)}%</b> of stock</span>`,
-  ];
+    `<span class="stat-line">Sold <b>${fmtN(rec.sold)}/${fmtN(rec.qty)}</b>${rec.soldOut? ` · sold out in <b>${rec.selloutMin<1? Math.round(rec.selloutMin*60)+'s' : rec.selloutMin+' min'}</b>`:''} · +<b class="g">${fmtN(sim.followerGain||0)}</b> followers</span>`,
+    `<span class="stat-line">Quality <b class="y">${rec.quality}/10</b> · resale settled at <b class="y">${fmt$(rec.resale)}</b> (${(rec.resale/rec.price).toFixed(1)}x retail)</span>`,
+  ].join('<br>');
+
+  // who showed up — genuine interest by crowd
+  const segNames = {collector:'Collectors', street:'Streetwear Fans', casual:'Casuals', enthusiast:'Enthusiasts', luxury:'Luxury', _loyal:'Loyal Core'};
+  const segs = Object.entries(sim.perSegment).filter(([k,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const maxSeg = Math.max(...segs.map(s=>s[1]), 1);
+  const who = segs.map(([k,v])=>`
+    <div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12px">
+      <span style="width:110px;color:var(--dim)">${segNames[k]||k}</span>
+      <div style="flex:1;height:8px;background:var(--panel2);border-radius:4px"><div style="height:100%;width:${Math.round(100*v/maxSeg)}%;background:var(--cyan);border-radius:4px"></div></div>
+      <b style="width:52px;text-align:right">${fmtN(v)}</b></div>`).join('')
+    + (sim.resellerBuys>0? `<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12px">
+      <span style="width:110px;color:var(--red)">Resellers</span>
+      <div style="flex:1;height:8px;background:var(--panel2);border-radius:4px"><div style="height:100%;width:${Math.round(100*sim.resellerBuys/maxSeg)}%;background:var(--red);border-radius:4px"></div></div>
+      <b style="width:52px;text-align:right">${fmtN(sim.resellerBuys)}</b></div>` : '');
+
+  // why it went this way
+  const why = (sim.factors||[]).map(([label, text, tone])=>`
+    <div style="display:flex;gap:8px;margin:6px 0;font-size:12.5px;line-height:1.45">
+      <span style="flex-shrink:0">${tone==='good'?'<span style="color:var(--green)">▲</span>':tone==='bad'?'<span style="color:var(--red)">▼</span>':'·'}</span>
+      <span><b>${label}</b> — <span style="color:var(--dim)">${text}</span></span></div>`).join('');
+
+  const firstTime = G.drops.length===1?
+    `<div style="background:var(--panel2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--dim);margin-bottom:12px">💡 Every drop gets this breakdown. The ▲▼ factors below are the game telling you exactly what the market rewards — learn them and your next drop hits harder.</div>` : '';
+
   showModal(rec.soldOut? 'SOLD OUT' : (rec.sold/rec.qty>=0.7? 'SOLID NUMBERS':'IT SAT'),
     rec.soldOut? 'good' : (rec.sold/rec.qty>=0.7?'info':'bad'),
-    lines.join('<br>'), [{label:'CONTINUE', cls:'primary', fn:()=>{ renderAll(); }}]);
+    firstTime + head +
+    `<div style="margin:14px 0 4px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Who showed up</div>${who}` +
+    `<div style="margin:14px 0 2px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Why it went this way</div>${why}`,
+    [{label:'CONTINUE', cls:'primary', fn:()=>{ renderAll(); }}]);
 }
 
 /* ---------------- launch animation ---------------- */

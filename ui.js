@@ -41,6 +41,7 @@ function gotoPage(id){
 function renderAll(){
   if(!G) return;
   renderTopbar();
+  renderTut();
   renderDashboard();
   renderStudio();
   renderDrop();
@@ -49,6 +50,24 @@ function renderAll(){
   renderResearch();
   renderHistory();
   $id('dropBadge').style.display = G.readyDrop? 'inline-block':'none';
+}
+
+/* Tutorial hint bar: contextual guidance for the first 3 weeks. */
+function renderTut(){
+  const b = $id('tutBanner');
+  if(!G || G.week>3 || G.tut.done){ b.style.display='none'; return; }
+  let msg;
+  if(G.drops.length===0 && !G.readyDrop && !G.droppedThisWeek)
+    msg = '👋 <b>Step 1 —</b> Open the <b>Design Studio</b>, name a collection, pick its look and materials, then <b>Finalize</b>. Every choice courts a different crowd (hover options for hints).';
+  else if(G.readyDrop)
+    msg = '🔥 <b>Step 2 —</b> Build hype in <b>Marketing</b> (the free Social Post is a start), then set <b>quantity & price</b> in the Drop tab. Producing <i>less</i> than demand = sellout, resale heat, prestige. Launch when ready.';
+  else if(G.droppedThisWeek)
+    msg = '📊 <b>Step 3 —</b> Drop done — read the breakdown to see <i>why</i> it went that way. Then hit <b>Advance Week ▸</b>: bills get paid, hype fades, the scene reacts.';
+  else
+    msg = '🧵 The loop: <b>Design → Hype → Drop → Advance</b>. Keep cash above zero, keep bots off your drops, and build prestige with quality + scarcity.';
+  b.innerHTML = msg + ' <button class="mini-btn" style="margin-left:10px;padding:2px 9px" id="tutDismiss">dismiss</button>';
+  b.style.display = 'block';
+  $id('tutDismiss').onclick = ()=>{ G.tut.done = 1; saveGame(); renderAll(); };
 }
 
 function renderTopbar(){
@@ -73,19 +92,20 @@ function renderDashboard(){
   const resales = G.drops.slice(-6);
   $id('dResale').textContent = resales.length? (resales.reduce((a,d)=>a+(d.resaleNow||d.resale)/d.price,0)/resales.length).toFixed(1)+'x' : '—';
 
-  // brand health meters
+  // brand health meters (hover any meter for what feeds it and what it does)
   const meters = [
-    ['Prestige',     G.prestige,     'gold', prestigeTier()],
-    ['Community Loyalty', G.loyalty, 'green', ''],
-    ['Reputation',   G.reputation,   '', ''],
-    ['Customer Satisfaction', G.satisfaction, 'green', ''],
-    ['Hype',         G.hype,         'red', 'fades weekly — feed it'],
+    ['Prestige',     G.prestige,     'gold', prestigeTier(), 'Earned by high-quality drops that genuinely sell out. Attracts better hires, boosts resale, and defines your legacy.'],
+    ['Community Loyalty', G.loyalty, 'green', '', 'Built by purchase limits, giveaways and treating fans well. Loyal fans buy every drop — it is a demand floor. Feeding bots destroys it.'],
+    ['Reputation',   G.reputation,   '', '', 'General standing. Public flops, refund waves and scandals hurt it; it quietly scales all demand.'],
+    ['Customer Satisfaction', G.satisfaction, 'green', '', 'Driven by quality vs price, packaging and shipping. Satisfied customers grow your followers every week.'],
+    ['Hype',         G.hype,         'red', 'fades weekly — feed it', 'Amplifies this week\'s reach. Decays ~28%/week, so build it the same week you drop.'],
   ];
-  $id('brandMeters').innerHTML = meters.map(([n,v,cls,sub])=>`
-    <div class="meter-row">
+  $id('brandMeters').innerHTML = meters.map(([n,v,cls,sub,tip])=>`
+    <div class="meter-row" title="${tip}">
       <div class="m-head"><span>${n}${sub?` <span style="color:var(--dim)">· ${sub}</span>`:''}</span><b>${Math.round(v)}</b></div>
       <div class="meter ${cls}"><div style="width:${clamp(v,0,100)}%"></div></div>
     </div>`).join('');
+  $id('diffLabel').textContent = diff().name;
 
   // competitor leaderboard (you included)
   const all = [...G.competitors.map(c=>({name:c.name, f:c.followers, me:false})), {name:G.brand, f:G.followers, me:true}]
@@ -125,13 +145,24 @@ function renderDashboard(){
 }
 
 /* ---------------- design studio ---------------- */
-function optRow(elId, list, cur, onPick, lockFn){
+
+// Turn a segment-modifier object into a readable "who likes this" hint.
+const SEG_SHORT = {collector:'Collectors', street:'Street', casual:'Casuals', enthusiast:'Fashion', luxury:'Luxury'};
+function modDesc(o){
+  if(!o || !o.mod) return '';
+  const parts = Object.entries(o.mod).map(([k,v])=> SEG_SHORT[k]+(v>0?' +':' −'));
+  return parts.join(' · ');
+}
+
+function optRow(elId, list, cur, onPick, lockFn, descFn){
   const box = $id(elId); box.innerHTML='';
   list.forEach(o=>{
     const locked = lockFn? lockFn(o) : false;
     const b = document.createElement('button');
     b.className = 'opt'+(cur===(o.id||o)?' sel':'')+(locked?' locked':'');
-    b.innerHTML = (o.name||o) + (locked? ' 🔒':'');
+    const sub = descFn? descFn(o) : modDesc(o);
+    b.innerHTML = (o.name||o) + (locked? ' 🔒':'') + (sub? `<small>${sub}</small>`:'');
+    b.title = locked? 'Locked — requires research' : (sub||'');
     if(!locked) b.onclick = ()=>{ onPick(o.id||o); saveGame(); renderStudio(); };
     box.appendChild(b);
   });
@@ -144,14 +175,20 @@ function renderStudio(){
   if(document.activeElement!==nameInput) nameInput.value = d.name;
   nameInput.oninput = ()=>{ d.name = nameInput.value; };
 
-  optRow('optProduct', PRODUCTS, d.product, v=>d.product=v);
-  optRow('optTheme',   THEMES,   d.theme,   v=>d.theme=v);
+  optRow('optProduct', PRODUCTS, d.product, v=>d.product=v, null,
+    p=>`cost ~${fmt$(p.cost)} · retail ${fmt$(p.retail)}${p.id===G.trend.product?' · 🔥 trending':''}`);
+  optRow('optTheme',   THEMES,   d.theme,   v=>d.theme=v, null,
+    t=> t===G.trend.theme? '🔥 trending — street & fashion crowds bite'
+      : (G.drops.length && G.drops[G.drops.length-1].theme===t? '⚠ same as last drop — reads stale':''));
   optRow('optPalette', PALETTES, d.palette, v=>d.palette=v);
   optRow('optLogo',    LOGOS,    d.logo,    v=>d.logo=v);
-  optRow('optGraphics',GRAPHICS, d.graphics,v=>d.graphics=v);
+  optRow('optGraphics',GRAPHICS, d.graphics,v=>d.graphics=v, null,
+    g=>`quality ${g.q>=0.5?'++':'+'}${g.costMult?' · cost +'+Math.round((g.costMult-1)*100)+'%':''}${modDesc(g)?' · '+modDesc(g):''}`);
   optRow('optFit',     FITS,     d.fit,     v=>d.fit=v);
-  optRow('optMaterial',MATERIALS,d.material,v=>d.material=v, m=>m.research && !G.research[m.research]);
-  optRow('optPackaging',PACKAGING,d.packaging,v=>d.packaging=v);
+  optRow('optMaterial',MATERIALS,d.material,v=>d.material=v, m=>m.research && !G.research[m.research],
+    m=>`quality +${m.q} · cost ×${m.costMult} — better fabric = satisfaction & resale`);
+  optRow('optPackaging',PACKAGING,d.packaging,v=>d.packaging=v, null,
+    p=>`+${fmt$(p.costAdd)}/unit${p.sat?' · satisfaction +'+p.sat:''}${modDesc(p)?' · '+modDesc(p):''}`);
 
   const prod = PRODUCTS.find(p=>p.id===d.product);
   const unit = designUnitCost(d);
@@ -314,10 +351,21 @@ function renderResearch(){
 }
 
 /* ---------------- history ---------------- */
+let histFilter = 'all';
 function renderHistory(){
   const box = $id('historyList');
+  document.querySelectorAll('#histFilters .opt').forEach(b=>{
+    b.classList.toggle('sel', b.dataset.hf===histFilter);
+    b.onclick = ()=>{ histFilter = b.dataset.hf; renderHistory(); };
+  });
   if(!G.drops.length){ box.innerHTML = '<div class="sub-stat">No drops yet. History is written one release at a time.</div>'; return; }
-  box.innerHTML = G.drops.slice().reverse().map(d=>{
+  let list = G.drops.slice().reverse();
+  if(histFilter==='soldout') list = list.filter(d=>d.soldOut);
+  else if(histFilter==='flop') list = list.filter(d=>!d.soldOut);
+  else if(histFilter==='profit') list = list.slice().sort((a,b)=>b.profit-a.profit);
+  else if(histFilter==='resale') list = list.slice().sort((a,b)=>(b.resaleNow||b.resale)-(a.resaleNow||a.resale));
+  if(!list.length){ box.innerHTML = '<div class="sub-stat">Nothing matches this filter yet.</div>'; return; }
+  box.innerHTML = list.map(d=>{
     const rn = d.resaleNow||d.resale;
     const mv = d.resalePrev!==undefined? rn-d.resalePrev : 0;
     const arrow = mv>0? '<span style="color:var(--green)">▲</span>' : mv<0? '<span style="color:var(--red)">▼</span>' : '·';
@@ -391,12 +439,46 @@ document.querySelectorAll('#nav button').forEach(b=>{
   b.onclick = ()=>gotoPage(b.dataset.page);
 });
 $id('advanceBtn').onclick = ()=>advanceWeek();
+$id('skipBtn').onclick = ()=>skipWeeks(4);
+
+/* difficulty selection on the start screen */
+let chosenDiff = 'normal';
+(function(){
+  const row = $id('diffRow');
+  Object.entries(DIFFS).forEach(([id,d])=>{
+    const b = document.createElement('button');
+    b.className = 'opt'+(id===chosenDiff?' sel':'');
+    b.textContent = d.name;
+    b.onclick = ()=>{
+      chosenDiff = id;
+      row.querySelectorAll('.opt').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel');
+      $id('diffBlurb').textContent = d.blurb + ` Start with ${fmt$(d.cash)}.`;
+    };
+    row.appendChild(b);
+  });
+  $id('diffBlurb').textContent = DIFFS.normal.blurb + ` Start with ${fmt$(DIFFS.normal.cash)}.`;
+})();
+
+/* settings & save QoL */
+$id('resetBtn').onclick = ()=>showModal('RESET SAVE?', 'bad',
+  'This deletes the brand permanently. Export first if you want a backup.',
+  [{label:'Keep playing', cls:'primary', fn:null},
+   {label:'Delete everything', fn:()=>{ wipeSave(); location.reload(); }}]);
+$id('exportBtn').onclick = ()=>exportSave();
+$id('importBtn').onclick = ()=>$id('importFile').click();
+$id('importFile').onchange = e=>{ if(e.target.files[0]) importSave(e.target.files[0]); };
 
 $id('startBtn').onclick = ()=>{
   const name = $id('startName').value.trim().toUpperCase() || 'NO LABEL';
-  newGame(name);
+  newGame(name, chosenDiff);
   saveGame();
   startUI();
+  showModal('WELCOME TO THE GAME', 'info',
+    `You run <b>${name}</b> from your bedroom.<br><br>
+     The loop: <b>Design</b> a collection → build <b>Hype</b> → configure and <b>Launch</b> a limited drop → <b>Advance the week</b> and read the fallout.<br><br>
+     What matters: sell out (undersupply beats oversupply), keep quality worth the price, protect real fans from resellers, and keep cash above zero. Prestige — earned by quality + scarcity — is the long game.`,
+    [{label:'LET\'S WORK', cls:'primary', fn:null}]);
 };
 $id('continueBtn').onclick = ()=>{
   G = loadGame();

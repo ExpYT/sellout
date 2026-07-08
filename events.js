@@ -73,6 +73,58 @@ const EVENTS = [
       {label:'Ignore it', fn:()=>{ G.satisfaction=clamp(G.satisfaction-10,0,100); G.reputation=clamp(G.reputation-6,0,100); return 'The posts keep circulating. Trust erodes.'; }},
     ],
   },
+  {
+    title:'MAGAZINE FEATURE', tone:'good',
+    cond:()=>G.prestige>=10,
+    text:()=>`An online culture magazine wants to profile ${G.brand} — but their "editorial partnership" costs money.`,
+    choices:[
+      {label:'Pay for the feature (−$800, +prestige, +followers)', cond:()=>G.cash>=800, fn:()=>{ G.cash-=800; G.prestige=clamp(G.prestige+2,0,100); const f=ri(200,500); G.followers+=f; return `The piece runs. +${fmtN(f)} followers and a prestige bump.`; }},
+      {label:'Real coverage should be free', fn:()=>{ if(Math.random()<0.3){ G.prestige=clamp(G.prestige+1,0,100); return 'They run a short piece anyway. Integrity noted.'; } return 'No feature. The moment passes.'; }},
+    ],
+  },
+  {
+    title:'INTERN POSTS EARLY', tone:'bad',
+    text:()=>`Someone posted next drop's designs a week early. The surprise is gone — but people are talking.`,
+    choices:[
+      {label:'Lean into it (+hype now, −demand at launch)', fn:()=>{ G.hype=clamp(G.hype+8,0,100); G.eventMods.demandMult=0.85; return 'The leak becomes the teaser. Some heat now, less mystery later.'; }},
+      {label:'Delete everything and deny', fn:()=>{ if(Math.random()<0.5){ return 'Scrubbed fast enough. Crisis averted.'; } G.reputation=clamp(G.reputation-3,0,100); return 'Screenshots never die. The denial made it worse.'; }},
+    ],
+  },
+  {
+    title:'RENT REVIEW', tone:'bad',
+    cond:()=>G.location>=1,
+    text:()=>`The landlord "reviews" your rent. Pay a lump settlement or eat higher costs on your next production run.`,
+    choices:[
+      {label:'Settle now (−$1,000)', cond:()=>G.cash>=1000, fn:()=>{ G.cash-=1000; return 'Paid. Back to work.'; }},
+      {label:'Fight it (next drop costs +15%)', fn:()=>{ G.eventMods.nextDropCost=1.15; return 'You win eventually — but the distraction costs you at the factory.'; }},
+    ],
+  },
+  {
+    title:'CUSTOMS HOLD', tone:'bad',
+    cond:()=>G.drops.length>=2,
+    text:()=>`A shipment is flagged at customs. Paperwork or patience.`,
+    choices:[
+      {label:'Hire a broker (−$700)', cond:()=>G.cash>=700, fn:()=>{ G.cash-=700; return 'Released in 48 hours. Money well spent.'; }},
+      {label:'Wait (−satisfaction)', fn:()=>{ G.satisfaction=clamp(G.satisfaction-6,0,100); return 'Orders ship late. The DMs are not kind.'; }},
+    ],
+  },
+  {
+    title:'FABRIC SWATCH SCORE', tone:'good',
+    text:()=>`Your supplier offers a one-time deal on premium deadstock fabric.`,
+    choices:[
+      {label:'Buy the lot (−$600, next drop quality +1)', cond:()=>G.cash>=600, fn:()=>{ G.cash-=600; G.eventMods.qualityBonus=1; return 'The fabric is beautiful. Your next collection will feel it.'; }},
+      {label:'Pass', fn:()=>'Someone else takes the lot.'},
+    ],
+  },
+  {
+    title:'COMMUNITY MEETUP', tone:'good',
+    cond:()=>G.loyalty>=55,
+    text:()=>`Fans are organizing a meetup wearing your pieces. They're asking if the brand will show up.`,
+    choices:[
+      {label:'Show up with free merch (−$400, ++loyalty)', cond:()=>G.cash>=400, fn:()=>{ G.cash-=400; G.loyalty=clamp(G.loyalty+8,0,100); G.followers+=ri(100,300); return 'Photos everywhere. This is how cults form — the good kind.'; }},
+      {label:'Repost and cheer from afar', fn:()=>{ G.loyalty=clamp(G.loyalty+2,0,100); return 'Appreciated, but a missed moment.'; }},
+    ],
+  },
 ];
 
 /* Roll an event ~35% of weeks. Returns the event or null. */

@@ -15,6 +15,8 @@
   <h1>STREETWEAR <span>EMPIRE</span></h1>
   <p>Start in your bedroom with a heat press and a dream. Design collections, run limited drops, build a community — and grow one of the most respected labels in the world.</p>
   <input id="startName" type="text" maxlength="20" placeholder="NAME YOUR BRAND" spellcheck="false">
+  <div class="opt-row" id="diffRow" style="justify-content:center"></div>
+  <div id="diffBlurb" style="font-size:12px;color:var(--dim);height:18px"></div>
   <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center">
     <button class="btn" id="startBtn">FOUND THE BRAND</button>
     <button class="btn secondary" id="continueBtn" style="display:none">CONTINUE SAVE</button>
@@ -30,7 +32,11 @@
   <div class="kpi"><span class="k-label">Hype</span><span class="k-value" id="kHype">0</span></div>
   <div class="kpi"><span class="k-label">Prestige</span><span class="k-value k-gold" id="kPrestige">0</span></div>
   <button id="advanceBtn">Advance Week ▸</button>
+  <button id="skipBtn" class="btn secondary" style="padding:10px 14px" title="Fast-forward 4 weeks — stops if something needs a decision">▸▸ 4</button>
 </div>
+
+<!-- tutorial hint bar (first 3 weeks) -->
+<div id="tutBanner" style="display:none; background:linear-gradient(90deg,rgba(108,123,255,.18),transparent); border-bottom:1px solid var(--line); padding:9px 22px; font-size:13px; color:var(--txt)"></div>
 
 <!-- ================= NAV ================= -->
 <div id="nav" style="display:none">
@@ -74,6 +80,16 @@
       <div class="card">
         <h3>Community Feed</h3>
         <div id="feedList" style="max-height:280px; overflow-y:auto"></div>
+      </div>
+      <div class="card">
+        <h3>Settings &amp; Save</h3>
+        <div style="display:flex; gap:8px; flex-wrap:wrap">
+          <button class="mini-btn" id="exportBtn">⬇ Export save</button>
+          <button class="mini-btn" id="importBtn">⬆ Import save</button>
+          <button class="mini-btn" id="resetBtn" style="color:var(--red)">🗑 Reset save</button>
+          <input type="file" id="importFile" accept=".json" style="display:none">
+        </div>
+        <div class="sub-stat" style="margin-top:10px">Difficulty: <b id="diffLabel" style="color:var(--txt)">Normal</b> · autosaves every week</div>
       </div>
     </div>
   </div>
@@ -162,6 +178,13 @@
   <div class="page" id="page-history">
     <div class="card">
       <h3>Drop History &amp; Resale Market</h3>
+      <div class="opt-row" id="histFilters" style="margin-bottom:12px">
+        <button class="opt sel" data-hf="all">All</button>
+        <button class="opt" data-hf="soldout">Sellouts</button>
+        <button class="opt" data-hf="flop">Undersold</button>
+        <button class="opt" data-hf="profit">Most Profitable</button>
+        <button class="opt" data-hf="resale">Highest Resale</button>
+      </div>
       <div id="historyList"></div>
     </div>
   </div>

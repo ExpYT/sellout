@@ -88,14 +88,24 @@ const PRESTIGE_TIERS = [
 
 const HANDLES = ['@dripcheck','@fitpicdaily','@sole.archive','@copthis','@modline','@waitlisted','@offrack','@stitchwatch','@carted','@lowkeyheat','@qualitycrit','@pressplayfits'];
 
+// Difficulty shapes the whole run: starting cash, market appetite, cost pressure, debt tolerance.
+const DIFFS = {
+  casual:  {name:'Casual',   cash:4500, demand:1.15, cost:0.90, debtLimit:4, blurb:'Forgiving market, cheap rent. Learn the ropes.'},
+  normal:  {name:'Normal',   cash:2500, demand:1.00, cost:1.00, debtLimit:3, blurb:'The intended experience.'},
+  hardcore:{name:'Hardcore', cash:1500, demand:0.88, cost:1.15, debtLimit:2, blurb:'Thin margins, cold market, fast bankruptcy.'},
+};
+function diff(){ return DIFFS[(G && G.difficulty)||'normal']; }
+
 /* ---------------- global state ---------------- */
 let G = null;
 
-function newGame(brand){
+function newGame(brand, difficulty){
+  difficulty = difficulty || 'normal';
   G = {
     brand,
+    difficulty,
     week: 1,
-    cash: 2500,
+    cash: DIFFS[difficulty].cash,
     followers: 150,
     hype: 5,             // volatile, decays weekly
     prestige: 2,         // 0–100, hard to earn
@@ -120,8 +130,10 @@ function newGame(brand){
     trend: {theme: pick(THEMES), product: pick(PRODUCTS).id},
     pendingEvent: null,
     eventMods: {},       // temporary modifiers set by events
+    tut: {},             // tutorial steps already shown
+    botStreak: 0,        // consecutive drops lost to resellers
   };
-  feedPost('sys', null, `${brand} founded in a bedroom. One heat press, ${fmt$(2500)}, and taste.`);
+  feedPost('sys', null, `${brand} founded in a bedroom. One heat press, ${fmt$(G.cash)}, and taste.`);
 }
 
 /* ---------------- derived values ---------------- */
@@ -150,16 +162,17 @@ function feedPost(cls, handle, text){
 function advanceWeek(){
   if(!G) return;
 
-  // 1. Pay the bills
-  const rent  = currentLocation().rent;
-  const wages = totalWages();
+  // 1. Pay the bills (difficulty scales cost pressure)
+  const rent  = Math.round(currentLocation().rent * diff().cost);
+  const wages = Math.round(totalWages() * diff().cost);
   G.cash -= rent + wages;
   G.weekLog.expenses += rent + wages;
   G.lastProfit = G.weekLog.revenue - G.weekLog.expenses;
 
   // 2. Hype fades, community drifts back toward neutral
+  // (a community manager actively rebuilds loyalty every week)
   G.hype = clamp(G.hype*0.72 - 1, 0, 100);
-  G.loyalty     += (50-G.loyalty)*0.04;
+  G.loyalty = clamp(G.loyalty + (50-G.loyalty)*0.04 + empBonus('community')*2.5, 0, 100);
   G.satisfaction+= (60-G.satisfaction)*0.05;
   G.reputation  += (50-G.reputation)*0.02;
 
@@ -200,14 +213,25 @@ function advanceWeek(){
   saveGame();
   renderAll();
 
-  // 11. Bankruptcy check — two weeks deep in the red ends the run
+  // 11. Bankruptcy check — debt tolerance depends on difficulty
   if(G.cash < 0){
     G.debtWeeks = (G.debtWeeks||0)+1;
-    if(G.debtWeeks>=3){ gameOver(); return; }
-    toast(`IN THE RED — week ${G.debtWeeks} of 3 before the bank calls`, 'gold');
+    if(G.debtWeeks >= diff().debtLimit){ gameOver(); return; }
+    toast(`IN THE RED — week ${G.debtWeeks} of ${diff().debtLimit} before the bank calls`, 'gold');
   } else G.debtWeeks = 0;
 
   if(ev) showEvent(ev);
+}
+
+/* Fast-forward up to n weeks; stops early if an event, drop-ready state
+   or bankruptcy needs the player's eyes.                                */
+function skipWeeks(n){
+  for(let i=0; i<n; i++){
+    advanceWeek();
+    if(!G) return;
+    if($id('modalBg').classList.contains('open')) return;  // event or game over wants a decision
+  }
+  toast(n+' weeks pass. The scene moves on.');
 }
 
 function gameOver(){
