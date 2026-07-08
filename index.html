@@ -209,7 +209,8 @@
   <div class="stat"><span class="lbl">Cash</span><span class="val" id="stCash">$0</span></div>
   <div class="stat" id="vaultStat" style="display:none"><span class="lbl">Vault</span><span class="val" id="stVault" style="color:var(--gold)">$0</span></div>
   <div class="stat"><span class="lbl">Burn</span><span class="val" id="stBurn" style="color:var(--red);font-size:14px">−$0/wk</span></div>
-  <div class="stat" id="hypeWrap"><span class="lbl">Hype <span id="stHypeN"></span></span><div id="hypeBar"><div id="hypeFill"></div></div></div>
+  <div class="stat" id="hypeWrap"><span class="lbl">Attention <span id="stHypeN"></span></span><div id="hypeBar"><div id="hypeFill"></div></div></div>
+  <div class="stat"><span class="lbl">Fans</span><span class="val" id="stFans" style="color:var(--green)">0</span></div>
   <div class="stat"><span class="lbl">Rep</span><span class="val" id="stRep" style="color:var(--gold)">0★</span></div>
   <div id="rankChip">#—</div>
   <div id="tierChip" style="font-family:'Archivo Black';font-size:12px;border:2px solid var(--gold);color:var(--gold);padding:3px 10px">LOCAL SCENE</div>
@@ -222,7 +223,7 @@
   <div>
     <div id="tabs">
       <button data-tab="drop" class="on">Drop</button>
-      <button data-tab="mkt">Hype</button>
+      <button data-tab="mkt">Promo</button>
       <button data-tab="crew">Crew</button>
       <button data-tab="hq">HQ</button>
       <button data-tab="arch">Archive</button>
@@ -283,7 +284,7 @@
 
     <!-- MARKETING TAB -->
     <div class="tabPane panel" id="tab-mkt">
-      <h2>Build hype (uses your week)</h2>
+      <h2>Build attention (uses your week)</h2>
       <div id="mktBtns"></div>
     </div>
 
@@ -375,7 +376,7 @@ const L_QUOTES = [
 ];
 const MID_QUOTES = [
   'decent drop from {L}, didn’t sell out tho',
-  'the {D} is cool but the hype wasn’t there',
+  'the {D} is cool but the attention wasn’t there',
   'solid piece. quiet release energy',
 ];
 
@@ -420,8 +421,8 @@ const VIBES = ['heavy chrome metal','washed grief-core','y2k rot','brutalist flo
 const UPGRADES = [
   {id:'designer', emoji:'✂️', name:'HIRE A DESIGNER',  cost:15000,  desc:'A real design studio. Demand +12% on everything, forever. Upkeep $250/wk.'},
   {id:'atelier',  emoji:'🏭', name:'IN-HOUSE ATELIER', cost:40000,  desc:'Own the production line. Unit costs −25%, forever. Upkeep $350/wk.'},
-  {id:'flagship', emoji:'🏬', name:'FLAGSHIP STORE',   cost:100000, desc:'A physical temple. Passive weekly sales: hype × $60. Upkeep $700/wk.'},
-  {id:'vault',    emoji:'🖼️', name:'ARCHIVE VAULT',    cost:250000, desc:'Your history becomes a museum. Hype decays 30% slower, +3 rep. Upkeep $250/wk.'},
+  {id:'flagship', emoji:'🏬', name:'FLAGSHIP STORE',   cost:100000, desc:'A physical temple. Passive weekly sales: attention × $60. Upkeep $700/wk.'},
+  {id:'vault',    emoji:'🖼️', name:'ARCHIVE VAULT',    cost:250000, desc:'Your history becomes a museum. Attention decays 30% slower, +3 rep. Upkeep $250/wk.'},
 ];
 
 /* ================= SFX ================= */
@@ -473,7 +474,7 @@ function newGame(label){
   const startRep  = Math.min(L.crowns, 5);
   const hot = pick(TYPES).id;
   S = {
-    label, week:1, cash:startCash, hype:startHype, rep:startRep,
+    label, week:1, cash:startCash, attention:startHype, rep:startRep,
     lastTypeId:null, typeStreak:0, upgrades:{}, debtWeeks:0,
     crew:{designer:null, plug:null, production:null},
     collection:null, pendingConcept:null,
@@ -507,12 +508,12 @@ function quote(tmpl, dropName){
 }
 
 /* ================= CORE MATH ================= */
-const audience = ()=> (36 + S.hype*15 + S.rep*6) * (S.upgrades.designer?1.12:1) * TIERS[S.tier||0].mult;
+const audience = ()=> (36 + S.attention*15 + S.rep*6) * (S.upgrades.designer?1.12:1) * TIERS[S.tier||0].mult;
 function priceFactor(type, price){
   const r = price/type.base;
   return r<=1 ? 1+(1-r)*0.5 : Math.max(0.05, 1-(r-1)*1.1);
 }
-function maxUnits(){ return 30 + Math.floor(S.hype*6); }
+function maxUnits(){ return 30 + Math.floor(S.attention*6); }
 function crewSkill(role){
   const m = S.crew && S.crew[role];
   if(!m) return 0;
@@ -538,7 +539,7 @@ function maybeEnd(){
   else { save(); render(); }
 }
 function weeklyBurn(){
-  return 150 + Math.round(S.hype*6) + crewWages()
+  return 150 + Math.round(S.attention*6) + crewWages()
     + (S.upgrades.designer?250:0) + (S.upgrades.atelier?350:0)
     + (S.upgrades.flagship?700:0) + (S.upgrades.vault?250:0);
 }
@@ -679,8 +680,9 @@ function render(){
   const vv = vaultValue();
   el('vaultStat').style.display = vv>0? 'flex':'none';
   if(vv>0) el('stVault').textContent = fmt$(vv);
-  el('stHypeN').textContent = Math.round(S.hype);
-  el('hypeFill').style.width = clamp(S.hype,0,100)+'%';
+  el('stHypeN').textContent = Math.round(S.attention);
+  el('hypeFill').style.width = clamp(S.attention,0,100)+'%';
+  el('stFans').textContent = totalFans().toLocaleString('en-US');
   el('rankChip').textContent = '#'+myRank()+' HEAT';
   el('stRep').textContent = S.rep+'★';
   el('tierChip').textContent = TIERS[S.tier||0].name + (S.promo==='armed'?' ⚡':'');
@@ -689,15 +691,15 @@ function render(){
 function renderProds(){
   const g = el('prodGrid'); g.innerHTML='';
   TYPES.forEach(t=>{
-    const locked = S.hype < t.unlock && !S.flags['seen_'+t.id];
-    if(S.hype>=t.unlock) S.flags['seen_'+t.id]=true;
+    const locked = S.attention < t.unlock && !S.flags['seen_'+t.id];
+    if(S.attention>=t.unlock) S.flags['seen_'+t.id]=true;
     const d = document.createElement('div');
     d.className = 'prodCard'+(t===selType?' sel':'')+(locked?' lock':'');
     const trend = !locked && S.trendHot===t.id ? '<div class="trend hot">🔥 HOT</div>'
                 : !locked && S.trendCold===t.id ? '<div class="trend cold">🧊 COLD</div>' : '';
     d.innerHTML = `<div class="emoji">${t.emoji}</div><div class="pname">${t.name}</div>
       <div class="pinfo">${locked?'???':`cost ${fmt$(unitCost(t))}/u · msrp ${fmt$(t.base)}`}</div>
-      ${trend}${locked?`<div class="lockTag">🔒 ${t.unlock} HYPE</div>`:''}`;
+      ${trend}${locked?`<div class="lockTag">🔒 ${t.unlock} ATTN</div>`:''}`;
     if(!locked) d.onclick = ()=>{ selType=t; syncSliderBounds(); render(); };
     g.appendChild(d);
   });
@@ -744,7 +746,7 @@ function renderSliders(){
      : S.trendCold===selType.id ? ' <span style="color:#7ad7ff">(🧊 out of season — demand −30%)</span>':'') +
     (S.promo==='armed'? `<br><span class="warn" style="color:var(--gold)">⚡ BREAKOUT CHALLENGE ARMED — THIS DROP MUST SELL OUT</span>`:'') +
     fanFitLine() +
-    `<br>Undersupply = instant sellout, hype + resale. Oversupply = a brick.`;
+    `<br>Undersupply = instant sellout, attention + resale. Oversupply = a brick.`;
   const noTime = (S.slots===undefined?3:S.slots) < 2;
   el('dropBtn').disabled = !afford || S.stock!==null || noTime;
   el('dropBtn').textContent = S.stock!==null ? 'CLEAR OLD STOCK FIRST (ARCHIVE TAB)'
@@ -753,11 +755,11 @@ function renderSliders(){
     : relC? '👑 RELEASE '+relC.name : 'DROP IT';
 }
 function myRank(){
-  return 1 + S.rivals.filter(r=>r.hype > S.hype).length;
+  return 1 + S.rivals.filter(r=>r.hype > S.attention).length;
 }
 function renderChart(){
   const all = [...S.rivals.map(r=>({name:r.name,hype:r.hype,prev:r.prev,me:false})),
-               {name:S.label,hype:S.hype,prev:S.prevHype??S.hype,me:true}]
+               {name:S.label,hype:S.attention,prev:S.prevAttention??S.attention,me:true}]
     .sort((a,b)=>b.hype-a.hype);
   el('chart').innerHTML = all.map((b,i)=>{
     const mv = b.hype - b.prev;
@@ -803,7 +805,7 @@ function renderMkt(){
   ];
   el('mktBtns').innerHTML='';
   M.forEach(m=>{
-    if(m.unlock && S.hype<m.unlock) return;
+    if(m.unlock && S.attention<m.unlock) return;
     const b = document.createElement('button');
     b.className='actBtn';
     b.innerHTML = `<span><span class="an">${m.n}</span><br><span class="ad">${m.d}</span></span><span class="ac">${m.c?fmt$(m.c):'+$500'}</span>`;
@@ -817,7 +819,7 @@ function renderHQ(){
   (S.deals||[]).forEach(dl=>{
     const d = document.createElement('div');
     d.className='archRow';
-    d.innerHTML = `<span class="rn">🤝 ${dl.name}</span><span class="rr">${dl.weeksLeft} wks left · ${dl.cashWk>=0?'+':''}${fmt$(dl.cashWk)}/wk · ${dl.hypeWk>=0?'+':''}${dl.hypeWk} hype/wk</span>`;
+    d.innerHTML = `<span class="rn">🤝 ${dl.name}</span><span class="rr">${dl.weeksLeft} wks left · ${dl.cashWk>=0?'+':''}${fmt$(dl.cashWk)}/wk · ${dl.hypeWk>=0?'+':''}${dl.hypeWk} attention/wk</span>`;
     el('upgList').appendChild(d);
   });
   if(S.flags.grail){
@@ -858,7 +860,7 @@ function renderArchive(){
   if(S.stock){
     const v = stockValue(0.12);
     sb.innerHTML = `<div class="archRow"><span class="rn">📦 ${S.stock.units}× ${S.stock.name}</span>
-      <button class="actBtn" style="width:auto;margin:0;padding:6px 12px" id="outletBtn"><span class="an">Outlet dump (+${fmt$(v)}, −3 hype)</span></button></div>`;
+      <button class="actBtn" style="width:auto;margin:0;padding:6px 12px" id="outletBtn"><span class="an">Outlet dump (+${fmt$(v)}, −3 attention)</span></button></div>`;
     el('outletBtn').onclick = doOutlet;
   } else sb.innerHTML = '<div class="archRow rr" style="color:var(--dim)">No unsold stock. Clean.</div>';
   const vv = vaultValue();
@@ -883,10 +885,10 @@ function sellStash(i){
   d.stash = 0;
   sfx('cash');
   if(Math.random()<0.15){
-    S.hype = clamp(S.hype-4, 0, 100);
+    S.attention = clamp(S.attention-4, 0, 100);
     addPost('', pick(HANDLES), quote('lmao {L} got caught flipping their own stash. shameless',''));
     addTicker(`${S.label} CAUGHT RESELLING THEIR OWN STOCK`);
-    toast('SOLD +'+fmt$(val)+' — BUT YOU GOT CAUGHT (−4 HYPE)');
+    toast('SOLD +'+fmt$(val)+' — BUT YOU GOT CAUGHT (−4 ATTENTION)');
   } else {
     toast('STASH FLIPPED +'+fmt$(val));
   }
@@ -942,14 +944,14 @@ function doDrop(){
   if(demand >= avail){
     sold = avail;
     const ratio = demand/avail;
-    hypeD = clamp(Math.round((2 + 4*Math.log2(ratio) + Math.min(6, avail/80)) * (1 - S.hype/140)), 1, 15);
+    hypeD = clamp(Math.round((2 + 4*Math.log2(ratio) + Math.min(6, avail/80)) * (1 - S.attention/140)), 1, 15);
     resale = Math.min(8, 1 + (ratio-1)*0.55 + ((P.make&&P.make.resaleBonus)||0) + ((P.buzz&&P.buzz.resaleBonus)||0));
     const speed = ratio>=3?'in 11 seconds':ratio>=2?'in 4 minutes':ratio>=1.3?'within the hour':'by end of day';
     S.cash += sold*price;
-    S.hype = clamp(S.hype+hypeD, 0, 100);
+    S.attention = clamp(S.attention+hypeD, 0, 100);
     title = 'SOLD OUT'; cls='w';
     html = `<b>${fullName}</b> sold out ${speed}.${viral?' <span class="y">IT WENT VIRAL.</span>':''}<br><br>
-      <span class="num g">+${fmt$(sold*price)}</span> revenue · <span class="num g">+${hypeD} hype</span><br>
+      <span class="num g">+${fmt$(sold*price)}</span> revenue · <span class="num g">+${hypeD} attention</span><br>
       Resale price already at <span class="num y">${fmt$(price*resale)}</span> (${resale.toFixed(1)}x)` +
       (stash? `<br>🔐 Your ${stash}-piece stash is already worth <span class="num y">${fmt$(Math.round(stash*price*resale))}</span>`:'');
     const n = ratio>=2?3:2;
@@ -965,18 +967,18 @@ function doDrop(){
     const net = sold*price - cost;
     const netLine = net>=0? `<span class="num g">+${fmt$(net)} net</span>` : `<span class="num r">−${fmt$(-net)} LOST</span>`;
     if(interest>=0.85){ hypeD = 1; title='NEARLY SOLD OUT'; cls='e';
-      html = `<b>${fullName}</b> moved ${sold}/${avail}. So close.<br><br>${netLine} · <span class="num">+1 hype</span> · ${left} pcs left in the back room.`;
+      html = `<b>${fullName}</b> moved ${sold}/${avail}. So close.<br><br>${netLine} · <span class="num">+1 attention</span> · ${left} pcs left in the back room.`;
       addPost('', pick(HANDLES), quote(pick(MID_QUOTES), fullName));
     } else if(interest>=0.55){ hypeD = -2; title='IT SAT'; cls='e';
-      html = `<b>${fullName}</b> moved ${sold}/${avail}. No line, no frenzy — and once that's obvious, everyone waits for clearance.<br><br>${netLine} · <span class="num r">−2 hype</span> · ${left} pcs unsold.`;
+      html = `<b>${fullName}</b> moved ${sold}/${avail}. No line, no frenzy — and once that's obvious, everyone waits for clearance.<br><br>${netLine} · <span class="num r">−2 attention</span> · ${left} pcs unsold.`;
       addPost('', pick(HANDLES), quote(pick(MID_QUOTES), fullName));
     } else { hypeD = -Math.round(5 + (1-interest)*6); title='BRICK.'; cls='l';
-      html = `<b>${fullName}</b> moved just ${sold}/${avail}. The moment it didn't sell out, even the interested buyers backed off to wait for clearance.<br><br>${netLine} · <span class="num r">${hypeD} hype</span> · ${left} pcs of shame in storage.`;
+      html = `<b>${fullName}</b> moved just ${sold}/${avail}. The moment it didn't sell out, even the interested buyers backed off to wait for clearance.<br><br>${netLine} · <span class="num r">${hypeD} attention</span> · ${left} pcs of shame in storage.`;
       addPost('', pick(HANDLES), quote(pick(L_QUOTES), fullName));
       addPost('', pick(HANDLES), quote(pick(L_QUOTES), fullName));
       addTicker(`${S.label} DROP BRICKS PUBLICLY`);
     }
-    S.hype = clamp(S.hype+hypeD, 0, 100);
+    S.attention = clamp(S.attention+hypeD, 0, 100);
     resale = Math.max(0.4, Math.min(1, interest));
     if(left>0) S.stock = {name:fullName, type:type.id, units:left, price};
   }
@@ -987,8 +989,8 @@ function doDrop(){
     const nt = TIERS[S.tier+1];
     if(cls==='w' && nt){
       S.tier++;
-      S.hype = clamp(S.hype+5, 0, 100);
-      html += `<br><br>⚡ <b class="y">BREAKOUT.</b> ${S.label} is now <b class="y">${nt.name}</b> — the audience just got ${nt.mult.toFixed(1)}x bigger. <span class="num g">+5 hype</span>`;
+      S.attention = clamp(S.attention+5, 0, 100);
+      html += `<br><br>⚡ <b class="y">BREAKOUT.</b> ${S.label} is now <b class="y">${nt.name}</b> — the audience just got ${nt.mult.toFixed(1)}x bigger. <span class="num g">+5 attention</span>`;
       addTicker(`${S.label} BREAKS THROUGH TO ${nt.name}`);
       addPost('hot', pick(HANDLES), quote(`{L} just went ${nt.name.toLowerCase()}. remember when they were selling tees out of a trunk?`, ''));
       sfx('grail');
@@ -1001,8 +1003,8 @@ function doDrop(){
   // collection releases swing twice as hard, both ways
   if(relC){
     hypeD = Math.round(hypeD * 1.8);
-    S.hype = clamp(S.hype + (hypeD - Math.round(hypeD/1.8)), 0, 100);
-    html += `<br>👑 CAPSULE RELEASE — the hype swing hits <b>${hypeD>=0?'+':''}${hypeD}</b> total.`;
+    S.attention = clamp(S.attention + (hypeD - Math.round(hypeD/1.8)), 0, 100);
+    html += `<br>👑 CAPSULE RELEASE — the attention swing hits <b>${hypeD>=0?'+':''}${hypeD}</b> total.`;
     S.collection = null;
     addTicker(cls==='w'? `${S.label} CAPSULE CEMENTS THEIR NAME` : `${S.label} CAPSULE FLOPS AFTER WEEKS OF TEASING`);
   }
@@ -1011,7 +1013,7 @@ function doDrop(){
   if(disaster){
     html += `<br><span class="r">🧵 QC DISASTER — crooked stitching, peeling prints. The cut-rate blanks bit back.</span>`;
     addPost('', pick(HANDLES), quote('my {D} arrived with the print PEELING. {L} check your factory', fullName));
-    S.hype = clamp(S.hype-2, 0, 100);
+    S.attention = clamp(S.attention-2, 0, 100);
   }
   // fanbase reacts — the heart of selling out vs staying true
   const dvibe = relC ? '__flagship__' : (S.pendingConcept? S.pendingConcept.vibe : null);
@@ -1103,18 +1105,18 @@ function doMarketing(id, cost){
   const pl = crewSkill('plug');
   if(id==='seed'){
     const roll = Math.random();
-    if(roll < 0.10+pl*0.03){ const g=ri(12,18)+pl; S.hype=clamp(S.hype+g,0,100); title='IT SPARKED'; cls='w';
-      html=`A mid-tier streamer wore your piece on cam for 6 hours. <span class="num g">+${g} hype</span>`;
+    if(roll < 0.10+pl*0.03){ const g=ri(12,18)+pl; S.attention=clamp(S.attention+g,0,100); title='IT SPARKED'; cls='w';
+      html=`A mid-tier streamer wore your piece on cam for 6 hours. <span class="num g">+${g} attention</span>`;
       addTicker(`${S.label} PIECE SPOTTED ON STREAM`);
-    } else if(roll < 0.65+pl*0.04){ const g=ri(3,8)+pl; S.hype=clamp(S.hype+g,0,100); title='SOME TRACTION';
-      html=`A few fit pics got posted. <span class="num g">+${g} hype</span>`;
+    } else if(roll < 0.65+pl*0.04){ const g=ri(3,8)+pl; S.attention=clamp(S.attention+g,0,100); title='SOME TRACTION';
+      html=`A few fit pics got posted. <span class="num g">+${g} attention</span>`;
     } else { title='CRICKETS.'; cls='l'; html='The packages arrived. Nobody posted. <span class="num r">$500 gone.</span>'; }
   } else if(id==='guerrilla'){
-    const g=ri(4,9)+pl; S.hype=clamp(S.hype+g,0,100); title='THE STREETS NOTICED'; cls='w';
-    html=`Your posters are all over the city. <span class="num g">+${g} hype</span>`;
+    const g=ri(4,9)+pl; S.attention=clamp(S.attention+g,0,100); title='THE STREETS NOTICED'; cls='w';
+    html=`Your posters are all over the city. <span class="num g">+${g} attention</span>`;
   } else if(id==='popup'){
-    const g=ri(8,15)+pl; S.hype=clamp(S.hype+g,0,100); title='LINE AROUND THE BLOCK'; cls='w';
-    html=`The pop-up popped. <span class="num g">+${g} hype</span>`;
+    const g=ri(8,15)+pl; S.attention=clamp(S.attention+g,0,100); title='LINE AROUND THE BLOCK'; cls='w';
+    html=`The pop-up popped. <span class="num g">+${g} attention</span>`;
     if(Math.random()<0.3){ S.rep=clamp(S.rep+1,0,10); html+=' · <span class="num y">+1 rep</span>'; }
     addTicker(`${S.label} POP-UP DRAWS CROWDS`);
   } else if(id==='hustle'){
@@ -1135,12 +1137,12 @@ function doOutlet(){
   if(!spendSlots(1)) return;
   const v = stockValue(0.12);
   S.cash += v;
-  S.hype = clamp(S.hype-3, 0, 100);
+  S.attention = clamp(S.attention-3, 0, 100);
   if(S.fans){ S.fans.reseller=Math.max(0,S.fans.reseller*0.6); S.fans.purist=Math.max(0,S.fans.purist-2); }
   addPost('', pick(HANDLES), quote('caught the {L} outlet dump… grail status revoked', ''));
   S.stock = null;
   sfx('cash');
-  showModal('STOCK DUMPED', 'e', `Moved everything through the outlet. <span class="num g">+${fmt$(v)}</span> · <span class="num r">−3 hype</span>`, [{label:'CONTINUE', run:maybeEnd}]);
+  showModal('STOCK DUMPED', 'e', `Moved everything through the outlet. <span class="num g">+${fmt$(v)}</span> · <span class="num r">−3 attention</span>`, [{label:'CONTINUE', run:maybeEnd}]);
 }
 
 /* ================= DROP PIPELINE ================= */
@@ -1162,7 +1164,7 @@ function renderPipe(){
     };
   });
   for(let i=1;i<=4;i++) el('stage'+i).style.display = (i===stage)? 'block':'none';
-  el('collexBtn').style.display = (stage===1 && S.hype>=25 && !S.collection)? 'block':'none';
+  el('collexBtn').style.display = (stage===1 && S.attention>=25 && !S.collection)? 'block':'none';
   el('collexBtn').disabled = S.cash < 800 || (S.slots===undefined?3:S.slots) < 2;
   if(stage===2) renderMakeOpts();
   if(stage===3) renderBuzzOpts();
@@ -1221,7 +1223,7 @@ function renderBuzzOpts(){
 function renderPipeSummary(){
   const P = S.pipe;
   if(S.collection && S.collection.ready){
-    el('pipeSummary').innerHTML = `👑 <b>${S.collection.name}</b> — quality ${stars(0.6 + S.collection.quality*0.28)} · double run size · double hype swing`;
+    el('pipeSummary').innerHTML = `👑 <b>${S.collection.name}</b> — quality ${stars(0.6 + S.collection.quality*0.28)} · double run size · double attention swing`;
     return;
   }
   const cn = S.pendingConcept? `${S.pendingConcept.name} ${stars(S.pendingConcept.hintQ)}` : '<span class="warn">UNVETTED DESIGN ⚠</span>';
@@ -1292,7 +1294,7 @@ function renderCollex(){
   el('collexBox').innerHTML =
     `<div style="border:2px solid var(--gold); padding:14px; margin-bottom:8px">
       <div class="blk" style="color:var(--gold); font-size:16px">👑 ${c.name} — WEEK ${c.weeks+1} OF 3</div>
-      <div style="font-size:12px; color:var(--dim); margin:6px 0 12px">The studio is locked in. No drops, hype bleeding, burn ticking. Quality read: <span style="color:var(--gold)">${stars(0.6 + c.quality*0.28)}</span></div>
+      <div style="font-size:12px; color:var(--dim); margin:6px 0 12px">The studio is locked in. No drops, attention bleeding, burn ticking. Quality read: <span style="color:var(--gold)">${stars(0.6 + c.quality*0.28)}</span></div>
       <button class="actBtn" id="cwPush"><span><span class="an">KEEP WORKING</span><br><span class="ad">Steady progress. Designer skill matters here.</span></span><span class="ac">FREE</span></button>
       <button class="actBtn" id="cwInvest"><span><span class="an">THROW MONEY AT IT</span><br><span class="ad">Premium fabric, guest artists. Big quality bump.</span></span><span class="ac">$1,500</span></button>
       <button class="actBtn" id="cwRush"><span><span class="an">RUSH IT OUT</span><br><span class="ad">Finish this week. Quality suffers. The scene can smell rushed work.</span></span><span class="ac">RISKY</span></button>
@@ -1334,7 +1336,7 @@ function renderCrew(){
 }
 function hireModal(r){
   const cands = [0,1,2].map(()=>{
-    const skill = clamp(ri(1,2) + ri(0, Math.floor(S.hype/25)), 1, 5);
+    const skill = clamp(ri(1,2) + ri(0, Math.floor(S.attention/25)), 1, 5);
     const trait = pick(TRAITS).id;
     const wage = Math.round(r.wageBase*(0.6 + skill*0.45) * (trait==='flaky'?0.7:1));
     return {name:pick(CREW_NAMES), skill, wage, trait, mood:70};
@@ -1357,16 +1359,26 @@ function pickCrewMember(){
 
 /* ================= WEEK CYCLE ================= */
 function endWeek(){
-  S.prevHype = S.hype;
+  S.prevAttention = S.attention;
   S.week++;
   S.slots = 3;
   // hype decay — fame is a leaky bucket
-  S.hype = clamp(S.hype - (1 + S.hype*0.055)*(S.upgrades.vault?0.7:1), 0, 100);
+  S.attention = clamp(S.attention - (1 + S.attention*0.055)*(S.upgrades.vault?0.7:1), 0, 100);
   // fans drift: hypebeasts are fickle, purists are loyal, resellers wander
   if(S.fans){ S.fans.hype = Math.max(0, S.fans.hype*0.9); S.fans.reseller = Math.max(0, S.fans.reseller*0.9); S.fans.purist = Math.max(0, S.fans.purist*0.992); }
+  // ATTENTION CONVERTS TO A LASTING FOLLOWING (the Garage Punk engine):
+  // the spotlight brings new fans, weighted toward your established identity
+  if(S.fans){
+    const conv = S.attention * 0.08;
+    const f=S.fans, tot=f.purist+f.hype+f.reseller+9;
+    f.purist   += conv*(f.purist+3)/tot;
+    f.hype     += conv*(f.hype+3)/tot;
+    f.reseller += conv*(f.reseller+3)/tot;
+    f.purist=clamp(f.purist,0,600); f.hype=clamp(f.hype,0,600); f.reseller=clamp(f.reseller,0,400);
+  }
   // flagship store moves product every week
   if(S.upgrades.flagship){
-    const inc = Math.round(S.hype*60);
+    const inc = Math.round(S.attention*60);
     if(inc>0){ S.cash += inc; S.stats.revenue += inc; toast('FLAGSHIP SALES +'+fmt$(inc)); }
   }
   // overheads — rent, samples, the cost of being seen
@@ -1385,7 +1397,7 @@ function endWeek(){
   S.drops.forEach(d=>{
     if(d.resaleNow===undefined){ d.resaleNow=d.resale; d.retail=d.retail||0; d.stash=d.stash||0; }
     d.prevResale = d.resaleNow;
-    d.resaleNow = clamp(d.resaleNow + (S.hype-50)*0.004 + rand(-0.12,0.12), 0.3, 12);
+    d.resaleNow = clamp(d.resaleNow + (S.attention-50)*0.004 + rand(-0.12,0.12), 0.3, 12);
     S.stats.bestResale = Math.max(S.stats.bestResale, d.resaleNow);
   });
   if(S.drops.length && Math.random()<0.05){
@@ -1422,7 +1434,7 @@ function endWeek(){
   S.deals = (S.deals||[]).filter(dl=>{
     S.cash += dl.cashWk;
     if(dl.cashWk>0) S.stats.revenue += dl.cashWk;
-    S.hype = clamp(S.hype + dl.hypeWk, 0, 100);
+    S.attention = clamp(S.attention + dl.hypeWk, 0, 100);
     dl.weeksLeft--;
     if(dl.weeksLeft<=0){ addPost('sys', null, `The ${dl.name} deal wrapped up.`); return false; }
     return true;
@@ -1430,17 +1442,17 @@ function endWeek(){
   // the ladder calls
   if(S.promoCooldown>0) S.promoCooldown--;
   const nt = TIERS[S.tier+1];
-  if(nt && !S.promo && S.promoCooldown===0 && S.hype>=nt.hypeReq && S.rep>=nt.repReq){
+  if(nt && !S.promo && S.promoCooldown===0 && S.attention>=nt.hypeReq && S.rep>=nt.repReq){
     S.promo = 'offered';
   }
   // pending bot scandal
   if(S.flags.botRisk){
     S.flags.botRisk = false;
     if(Math.random()<0.5){
-      S.hype = clamp(S.hype-8,0,100);
+      S.attention = clamp(S.attention-8,0,100);
       addPost('hot', '@sellout.exe', quote('LEAK: {L} sold early access to a bot farm. down horrendous', ''));
       addTicker(`${S.label} BOT SCANDAL EXPOSED`);
-      toast('BOT SCANDAL LEAKED — −8 HYPE');
+      toast('BOT SCANDAL LEAKED — −8 ATTENTION');
     }
   }
   // rivals drift — and hunt the throne when you hold it
@@ -1457,7 +1469,7 @@ function endWeek(){
   });
   // trends shift often — chase them or set them
   if(Math.random()<0.5) rerollTrends();
-  S.stats.peakHype = Math.max(S.stats.peakHype, S.hype);
+  S.stats.peakHype = Math.max(S.stats.peakHype, S.attention);
   S.stats.bestRank = Math.min(S.stats.bestRank, myRank());
   save();
   render();
@@ -1494,7 +1506,7 @@ function checkEndings(){
     localStorage.removeItem(SAVE_KEY);
     return true;
   }
-  if(S.cash < 150 && stockUnits===0 && vaultValue()<50 && S.hype < 3){
+  if(S.cash < 150 && stockUnits===0 && vaultValue()<50 && S.attention < 3){
     sfx('brick');
     showModal('THE LABEL IS DEAD', 'l',
       `No cash, no stock, no heat. ${S.label} quietly deletes its account.<br><br>`+runStats(),
@@ -1503,12 +1515,12 @@ function checkEndings(){
     localStorage.removeItem(SAVE_KEY);
     return true;
   }
-  if(!S.flags.grail && myRank()===1 && S.hype>=85 && (S.tier||0)===3){
+  if(!S.flags.grail && myRank()===1 && S.attention>=85 && (S.tier||0)===3){
     S.flags.grail = true;
     sfx('grail');
     addTicker(`${S.label} IS OFFICIALLY THE HOTTEST LABEL ALIVE`);
     showModal('GRAIL STATUS 👑', 'w',
-      `${S.label} is #1 on the Heat 100 with ${Math.round(S.hype)}° heat. Museums are calling. Resellers weep with joy.<br><br>`+runStats()+
+      `${S.label} is #1 on the Heat 100 with ${Math.round(S.attention)}° heat. Museums are calling. Resellers weep with joy.<br><br>`+runStats()+
       `<br>You've won. Keep running it — or retire at the peak for a permanent crown and start the next legend stronger.`,
       [{label:'KEEP RUNNING THE LABEL', run:null},
        {label:'RETIRE INTO LEGEND (+1 👑)', run:retireLabel}]);
@@ -1518,7 +1530,7 @@ function checkEndings(){
   return false;
 }
 function runStats(){
-  return `<span class="num">WEEKS:</span> ${S.week} · <span class="num">DROPS:</span> ${S.stats.dropsCount} · <span class="num">PEAK HYPE:</span> ${Math.round(S.stats.peakHype)}°<br>`+
+  return `<span class="num">WEEKS:</span> ${S.week} · <span class="num">DROPS:</span> ${S.stats.dropsCount} · <span class="num">PEAK ATTENTION:</span> ${Math.round(S.stats.peakHype)}°<br>`+
          `<span class="num">BEST RANK:</span> #${S.stats.bestRank} · <span class="num">TOTAL REVENUE:</span> ${fmt$(S.stats.revenue)} · <span class="num">BEST RESALE:</span> ${S.stats.bestResale.toFixed(1)}x`;
 }
 
@@ -1550,7 +1562,7 @@ function drawCard(d){
   x.fillStyle='#f2f2f2'; x.font='19px "Space Grotesk", Arial, sans-serif';
   const lines = [
     `${d.tier||'LOCAL SCENE'} · ${d.weeks} weeks · ${d.drops} drops · ${fmt$(d.revenue)} total revenue`,
-    `Peak hype ${d.peakHype}° · best rank #${d.bestRank} · best resale ${d.bestResale.toFixed(1)}x`,
+    `Peak attention ${d.peakHype}° · best rank #${d.bestRank} · best resale ${d.bestResale.toFixed(1)}x`,
     `${d.archetype||''}${d.fans?' · '+d.fans+' fans':''}${d.signature?' · '+d.signature:''}`,
     d.bestDrop? `Grail piece: ${d.bestDrop}`:'',
   ];
@@ -1567,7 +1579,7 @@ function downloadCanvas(c, name){
   a.click();
 }
 function copyRunText(d){
-  const t = `SELLOUT — ${d.label}\n${d.ending}\n${d.weeks} weeks · ${d.drops} drops · ${fmt$(d.revenue)} revenue\nPeak hype ${d.peakHype}° · best rank #${d.bestRank} · best resale ${d.bestResale.toFixed(1)}x` + (d.bestDrop? `\nGrail piece: ${d.bestDrop}`:'');
+  const t = `SELLOUT — ${d.label}\n${d.ending}\n${d.weeks} weeks · ${d.drops} drops · ${fmt$(d.revenue)} revenue\nPeak attention ${d.peakHype}° · best rank #${d.bestRank} · best resale ${d.bestResale.toFixed(1)}x` + (d.bestDrop? `\nGrail piece: ${d.bestDrop}`:'');
   try{ navigator.clipboard.writeText(t).then(()=>toast('COPIED TO CLIPBOARD'), ()=>toast('COPY BLOCKED — DOWNLOAD THE PNG')); }
   catch(e){ toast('COPY BLOCKED — DOWNLOAD THE PNG'); }
 }
@@ -1593,7 +1605,7 @@ function retireLabel(){
 
 /* ================= FASHION WEEK ================= */
 function fashionWeek(){
-  const cost = Math.round(8000 + S.hype*300);
+  const cost = Math.round(8000 + S.attention*300);
   const recent = S.drops.slice(-4);
   const variety = new Set(recent.map(d=>d.name.split(' ').pop())).size;
   sfx('event');
@@ -1604,26 +1616,26 @@ function fashionWeek(){
     const roll = Math.random();
     let html='', cls='e';
     if(roll < p){
-      const g = ri(12,20); S.hype = clamp(S.hype+g,0,100); S.rep = clamp(S.rep+1,0,10);
+      const g = ri(12,20); S.attention = clamp(S.attention+g,0,100); S.rep = clamp(S.rep+1,0,10);
       cls='w'; sfx('grail');
-      html = `Standing ovation. Front row full of celebrities, every blog running your looks.<br><br><span class="num g">+${g} hype</span> · <span class="num y">+1 rep</span>`;
+      html = `Standing ovation. Front row full of celebrities, every blog running your looks.<br><br><span class="num g">+${g} attention</span> · <span class="num y">+1 rep</span>`;
       addTicker(`${S.label} COLLECTION CLOSES FASHION WEEK`);
       addPost('hot', pick(HANDLES), quote('the {L} runway show ENDED the season. nothing else mattered',''));
     } else if(roll < p+0.35){
-      const g = ri(2,6); S.hype = clamp(S.hype+g,0,100);
-      html = `Polite applause. A few good reviews, a few shrugs.<br><br><span class="num g">+${g} hype</span>`;
+      const g = ri(2,6); S.attention = clamp(S.attention+g,0,100);
+      html = `Polite applause. A few good reviews, a few shrugs.<br><br><span class="num g">+${g} attention</span>`;
       addPost('', pick(HANDLES), quote('the {L} show was… fine? mid maybe',''));
     } else {
-      const l = ri(5,10); S.hype = clamp(S.hype-l,0,100);
+      const l = ri(5,10); S.attention = clamp(S.attention-l,0,100);
       cls='l'; sfx('brick');
-      html = `The critics were merciless. One review just said "why?".<br><br><span class="num r">−${l} hype</span>`;
+      html = `The critics were merciless. One review just said "why?".<br><br><span class="num r">−${l} attention</span>`;
       addPost('', pick(HANDLES), quote('{L} got cooked at fashion week and honestly? deserved',''));
     }
     save(); render();
     showModal('THE REVIEWS ARE IN', cls, html, [{label:'OK', run:null}]);
   }});
   choices.push({label:'SKIP THE SEASON', run:()=>{
-    S.hype = clamp(S.hype-3,0,100);
+    S.attention = clamp(S.attention-3,0,100);
     addTicker(`${S.label} SITS OUT FASHION WEEK — RIVALS SHINE`);
     save(); render();
   }});
@@ -1651,9 +1663,9 @@ function fireEvent(){
 }
 const EVENTS = [
   { title:'CELEB SPOTTED', desc:()=>`A chart-topping rapper got papped in a ${S.label} piece. The photo is everywhere.`,
-    choices:[{label:'LET IT COOK', run:()=>{ const g=ri(8,14); S.hype=clamp(S.hype+g,0,100);
+    choices:[{label:'LET IT COOK', run:()=>{ const g=ri(8,14); S.attention=clamp(S.attention+g,0,100);
       addTicker(`RAP STAR SPOTTED IN ${S.label}`);
-      return {cls:'w', html:`<span class="num g">+${g} hype</span>. You didn't even pay for it.`}; }}]},
+      return {cls:'w', html:`<span class="num g">+${g} attention</span>. You didn't even pay for it.`}; }}]},
   { title:'BOT FARM DM', desc:()=>`A reseller bot operation offers ${fmt$(2500)} for early access links to your next drop. Nobody would know. Probably.`,
     choices:[
       {label:'TAKE THE BAG (+$2,500, risky)', run:()=>{ S.cash+=2500; S.flags.botRisk=true;
@@ -1662,65 +1674,65 @@ const EVENTS = [
         return {cls:'w', html:'You post the DM screenshot. The community respects it. <span class="num y">+1 rep</span>'}; }}]},
   { title:'FAKES FLOOD THE MARKET', desc:()=>`Counterfeit ${S.label} pieces are all over the resale apps. Stitching is terrible. People are getting scammed.`,
     choices:[
-      {label:'LAWYER UP (−$1,500)', cond:()=>S.cash>=1500, run:()=>{ S.cash-=1500; S.rep=clamp(S.rep+2,0,10); const g=ri(1,4); S.hype=clamp(S.hype+g,0,100);
-        return {cls:'w', html:`Takedowns issued. Fans post the cease-and-desist like a trophy. <span class="num y">+2 rep</span> · <span class="num g">+${g} hype</span>`}; }},
-      {label:'IGNORE IT', run:()=>{ S.hype=clamp(S.hype-5,0,100);
-        return {cls:'l', html:'Fakes everywhere dilute the brand. <span class="num r">−5 hype</span>'}; }}]},
+      {label:'LAWYER UP (−$1,500)', cond:()=>S.cash>=1500, run:()=>{ S.cash-=1500; S.rep=clamp(S.rep+2,0,10); const g=ri(1,4); S.attention=clamp(S.attention+g,0,100);
+        return {cls:'w', html:`Takedowns issued. Fans post the cease-and-desist like a trophy. <span class="num y">+2 rep</span> · <span class="num g">+${g} attention</span>`}; }},
+      {label:'IGNORE IT', run:()=>{ S.attention=clamp(S.attention-5,0,100);
+        return {cls:'l', html:'Fakes everywhere dilute the brand. <span class="num r">−5 attention</span>'}; }}]},
   { title:'FABRIC PRICES SPIKE', desc:()=>'Global supply chain chaos. Your factory calls: next production run costs +35%.',
     choices:[{label:'GREAT.', run:()=>{ S.flags.costSpike=true; return null; }}]},
   { title:'DESIGN LEAKED', desc:()=>'Someone at the factory leaked your next design. Half the mystery is gone.',
     choices:[{label:'DAMAGE DONE', run:()=>{ S.flags.leaked=true; return null; }}]},
   { title:'MAGAZINE FEATURE', desc:()=>`A big culture magazine offers a feature spread on ${S.label} — for ${fmt$(1200)} in "production costs".`,
     choices:[
-      {label:'PAY FOR IT (−$1,200)', cond:()=>S.cash>=1200, run:()=>{ S.cash-=1200; const g=ri(4,10); S.hype=clamp(S.hype+g,0,100);
+      {label:'PAY FOR IT (−$1,200)', cond:()=>S.cash>=1200, run:()=>{ S.cash-=1200; const g=ri(4,10); S.attention=clamp(S.attention+g,0,100);
         addTicker(`${S.label} GETS THE COVER TREATMENT`);
-        return {cls:'w', html:`The spread looks incredible. <span class="num g">+${g} hype</span>`}; }},
+        return {cls:'w', html:`The spread looks incredible. <span class="num g">+${g} attention</span>`}; }},
       {label:'REAL ONES DON’T PAY FOR PRESS', run:()=>null}]},
   { title:'RIVAL SHADE', desc:()=>{ const r=pick(S.rivals); S._shadeRival=r.name;
       return `${r.name} posted a story mocking your last drop. The comments are a warzone.`; },
     choices:[
-      {label:'CLAP BACK', run:()=>{ if(Math.random()<0.5){ const g=ri(4,8); S.hype=clamp(S.hype+g,0,100);
+      {label:'CLAP BACK', run:()=>{ if(Math.random()<0.5){ const g=ri(4,8); S.attention=clamp(S.attention+g,0,100);
           addTicker(`${S.label} ENDS ${S._shadeRival} IN ONE POST`);
-          return {cls:'w', html:`Your reply goes viral. <span class="num g">+${g} hype</span>`}; }
-        const l=ri(4,8); S.hype=clamp(S.hype-l,0,100);
-        return {cls:'l', html:`You fumbled the reply. Screenshots forever. <span class="num r">−${l} hype</span>`}; }},
+          return {cls:'w', html:`Your reply goes viral. <span class="num g">+${g} attention</span>`}; }
+        const l=ri(4,8); S.attention=clamp(S.attention-l,0,100);
+        return {cls:'l', html:`You fumbled the reply. Screenshots forever. <span class="num r">−${l} attention</span>`}; }},
       {label:'STAY QUIET', run:()=>({html:'Silence. Mysterious. The beef dies.'})}]},
   { title:'OLD POSTS RESURFACE', desc:()=>'Someone dug up embarrassing posts from before the label. It’s trending, and not in a good way.',
     choices:[
-      {label:'APOLOGY VIDEO', run:()=>{ S.hype=clamp(S.hype-6,0,100);
-        if(Math.random()<0.6){ S.hype=clamp(S.hype+4,0,100); return {html:'<span class="num r">−6 hype</span>, but the apology mostly landed. <span class="num g">+4 back</span>'}; }
-        S.hype=clamp(S.hype-3,0,100);
-        return {cls:'l', html:'<span class="num r">−6 hype</span>, and the apology made it worse. <span class="num r">−3 more</span>'}; }},
-      {label:'SAY NOTHING', run:()=>{ S.hype=clamp(S.hype-6,0,100);
-        return {cls:'l', html:'The cycle moves on in a week. <span class="num r">−6 hype</span>'}; }}]},
-  { title:'COLLAB OFFER', cond:()=>S.rivals.some(r=>r.hype>S.hype+10),
-    desc:()=>{ const r=pick(S.rivals.filter(x=>x.hype>S.hype+10)); S._collabRival=r;
+      {label:'APOLOGY VIDEO', run:()=>{ S.attention=clamp(S.attention-6,0,100);
+        if(Math.random()<0.6){ S.attention=clamp(S.attention+4,0,100); return {html:'<span class="num r">−6 attention</span>, but the apology mostly landed. <span class="num g">+4 back</span>'}; }
+        S.attention=clamp(S.attention-3,0,100);
+        return {cls:'l', html:'<span class="num r">−6 attention</span>, and the apology made it worse. <span class="num r">−3 more</span>'}; }},
+      {label:'SAY NOTHING', run:()=>{ S.attention=clamp(S.attention-6,0,100);
+        return {cls:'l', html:'The cycle moves on in a week. <span class="num r">−6 attention</span>'}; }}]},
+  { title:'COLLAB OFFER', cond:()=>S.rivals.some(r=>r.hype>S.attention+10),
+    desc:()=>{ const r=pick(S.rivals.filter(x=>x.hype>S.attention+10)); S._collabRival=r;
       return `${r.name} (${Math.round(r.hype)}° heat) wants a collab capsule. Buy-in: ${fmt$(2500)}.`; },
     choices:[
       {label:'SIGN THE DEAL (−$2,500)', cond:()=>S.cash>=2500, run:()=>{ S.cash-=2500;
-        const g = Math.round((S._collabRival.hype - S.hype)*0.25 + 5); S.hype=clamp(S.hype+g,0,100);
+        const g = Math.round((S._collabRival.hype - S.attention)*0.25 + 5); S.attention=clamp(S.attention+g,0,100);
         addTicker(`${S.label} × ${S._collabRival.name} COLLAB CONFIRMED`);
-        return {cls:'w', html:`The collab capsule sells out instantly. <span class="num g">+${g} hype</span>`}; }},
+        return {cls:'w', html:`The collab capsule sells out instantly. <span class="num g">+${g} attention</span>`}; }},
       {label:'STAY INDEPENDENT', run:()=>({html:'You pass. Purists nod approvingly.'})}]},
   { title:'STOLEN DESIGN CLAIM', desc:()=>'An indie artist claims your last graphic rips off their work. The side-by-side is… not great for you.',
     choices:[
       {label:'SETTLE QUIETLY (−$800)', cond:()=>S.cash>=800, run:()=>{ S.cash-=800; S.rep=clamp(S.rep+1,0,10);
         return {html:'Handled. They post "resolved 🤝". <span class="num y">+1 rep</span>'}; }},
-      {label:'FIGHT IT', run:()=>{ if(Math.random()<0.5){ const g=ri(1,3); S.hype=clamp(S.hype+g,0,100);
-          return {cls:'w', html:`Your receipts were better. <span class="num g">+${g} hype</span>`}; }
-        S.cash=Math.max(0,S.cash-2000); S.hype=clamp(S.hype-7,0,100);
-        return {cls:'l', html:'You lost, loudly. <span class="num r">−$2,000 · −7 hype</span>'}; }}]},
+      {label:'FIGHT IT', run:()=>{ if(Math.random()<0.5){ const g=ri(1,3); S.attention=clamp(S.attention+g,0,100);
+          return {cls:'w', html:`Your receipts were better. <span class="num g">+${g} attention</span>`}; }
+        S.cash=Math.max(0,S.cash-2000); S.attention=clamp(S.attention-7,0,100);
+        return {cls:'l', html:'You lost, loudly. <span class="num r">−$2,000 · −7 attention</span>'}; }}]},
   { title:'WAREHOUSE POP-UP OFFER', cond:()=>S.stock!==null,
     desc:()=>`A promoter offers to move your ${S.stock.units} pcs of dead stock at a hyped warehouse party — 35% of market value, and it looks like an event, not a dump.`,
     choices:[
       {label:'RUN IT', run:()=>{ const v=stockValue(0.35); S.cash+=v; S.stock=null;
-        const g=ri(2,5); S.hype=clamp(S.hype+g,0,100);
-        return {cls:'w', html:`Stock gone, and it looked intentional. <span class="num g">+${fmt$(v)} · +${g} hype</span>`}; }},
+        const g=ri(2,5); S.attention=clamp(S.attention+g,0,100);
+        return {cls:'w', html:`Stock gone, and it looked intentional. <span class="num g">+${fmt$(v)} · +${g} attention</span>`}; }},
       {label:'PASS', run:()=>null}]},
   { title:'WHOLESALE OFFER', cond:()=>S.rep>=2 && (S.deals||[]).length<2 && (S.tier||0)>=1,
     desc:()=>`A big department store chain wants ${S.label} on their shelves: ${fmt$(2500)}/week for 6 weeks, guaranteed. The purists will call you a sellout. Because you would be.`,
     choices:[
-      {label:'SIGN IT (+$2,500/wk, −1.5 hype/wk, 6 wks)', run:()=>{
+      {label:'SIGN IT (+$2,500/wk, −1.5 attention/wk, 6 wks)', run:()=>{
         S.deals.push({name:'WHOLESALE', weeksLeft:6, cashWk:2500, hypeWk:-1.5});
         if(S.fans){ const lost=Math.round(S.fans.purist*0.3); S.fans.purist-=lost; S.fans.hype+=12; }
         addTicker(`${S.label} SPOTTED ON DEPARTMENT STORE RACKS`);
@@ -1730,7 +1742,7 @@ const EVENTS = [
   { title:'BOUTIQUE PLACEMENT', cond:()=>S.rep>=1 && (S.deals||[]).length<2,
     desc:()=>`The most respected boutique in the city offers a consignment wall: costs you ${fmt$(500)}/week in stock for 4 weeks, but the right people see it every day.`,
     choices:[
-      {label:'TAKE THE WALL (−$500/wk, +1.5 hype/wk, 4 wks)', cond:()=>S.cash>=2000, run:()=>{
+      {label:'TAKE THE WALL (−$500/wk, +1.5 attention/wk, 4 wks)', cond:()=>S.cash>=2000, run:()=>{
         S.deals.push({name:'BOUTIQUE WALL', weeksLeft:4, cashWk:-500, hypeWk:1.5});
         if(S.fans) S.fans.purist+=5;
         return {cls:'w', html:'Your pieces now hang where taste is decided. Purists notice.'}; }},
@@ -1748,8 +1760,8 @@ const EVENTS = [
     choices:[
       {label:'MATCH THE OFFER (wage ×2)', run:()=>{ S.crew.designer.wage*=2;
         return {html:`Matched. ${S.crew.designer.name} stays — at ${fmt$(S.crew.designer.wage)}/wk.`}; }},
-      {label:'LET THEM GO', run:()=>{ const n=S.crew.designer.name; S.crew.designer=null; S.hype=clamp(S.hype-3,0,100);
-        return {cls:'l', html:`${n} left for ${S._rv}. The scene noticed. <span class="num r">−3 hype</span>`}; }}]},
+      {label:'LET THEM GO', run:()=>{ const n=S.crew.designer.name; S.crew.designer=null; S.attention=clamp(S.attention-3,0,100);
+        return {cls:'l', html:`${n} left for ${S._rv}. The scene noticed. <span class="num r">−3 attention</span>`}; }}]},
   { title:'CREW BURNOUT', cond:()=>CREW_ROLES.some(r=>S.crew[r.id]),
     desc:()=>{ const e=pickCrewMember(); S._ev=e; return `${e.m.name} is running on fumes — missed deadlines, 4am voice memos, crying at the fabric store.`; },
     choices:[
@@ -1784,6 +1796,7 @@ function load(){
     s.deals = s.deals || [];
     s.pipe = s.pipe || null;
     if(s.slots===undefined) s.slots = 3;
+    if(s.attention===undefined) s.attention = (s.hype!==undefined? s.hype : 8);
     s.fans = s.fans || {purist:10, hype:6, reseller:2};
     s.vibeHistory = s.vibeHistory || [];
     if(s.signature===undefined) s.signature = null;
@@ -1864,7 +1877,7 @@ if(load()) el('contBtn').style.display='inline-block';
   if(L.crowns>0){
     const last = L.labels.slice(-3).map(l=>l.name).join(', ');
     el('legacyLine').innerHTML =
-      `${'👑'.repeat(Math.min(L.crowns,10))} LEGACY: ${L.crowns} crown${L.crowns>1?'s':''} — next label starts with +${fmt$(L.crowns*2000)} cash & +${Math.min(L.crowns*3,17)} hype`+
+      `${'👑'.repeat(Math.min(L.crowns,10))} LEGACY: ${L.crowns} crown${L.crowns>1?'s':''} — next label starts with +${fmt$(L.crowns*2000)} cash & +${Math.min(L.crowns*3,17)} attention`+
       (last? `<br><span style="color:var(--dim);font-weight:400">retired legends: ${last}</span>`:'');
   }
 })();
