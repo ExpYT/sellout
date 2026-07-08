@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SELLOUT — Merch Drop Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0b0b; --panel:#141414; --panel2:#1b1b1b; --line:#2a2a2a;
+    --txt:#f2f2f2; --dim:#9a9a9a; --red:#ff2b2b; --green:#57ff9a; --gold:#ffd24a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--txt); font-family:'Space Grotesk', Arial, sans-serif; min-height:100vh;}
+  h1,h2,h3,.blk{font-family:'Archivo Black', Impact, sans-serif; letter-spacing:.02em; text-transform:uppercase;}
+  button{font-family:inherit; cursor:pointer;}
+  input[type=text]{font-family:inherit;}
+
+  /* ---------- header ---------- */
+  #hdr{display:flex; align-items:center; gap:18px; padding:10px 16px; border-bottom:2px solid var(--line); flex-wrap:wrap; position:sticky; top:0; background:var(--bg); z-index:5;}
+  #brandName{font-family:'Archivo Black'; font-size:22px; text-transform:uppercase; background:var(--red); color:#fff; padding:2px 10px;}
+  .stat{display:flex; flex-direction:column; min-width:82px;}
+  .stat .lbl{font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.12em;}
+  .stat .val{font-size:18px; font-weight:700;}
+  #hypeWrap{flex:1; min-width:140px; max-width:340px;}
+  #hypeBar{height:14px; background:var(--panel2); border:1px solid var(--line); position:relative; overflow:hidden;}
+  #hypeFill{height:100%; width:0%; background:linear-gradient(90deg,#ff2b2b,#ff7a2b,#ffd24a); transition:width .6s ease;}
+  #rankChip{font-family:'Archivo Black'; font-size:15px; border:2px solid var(--txt); padding:3px 10px;}
+  #resetBtn,#muteBtn{background:none; border:1px solid var(--line); color:var(--dim); padding:4px 10px; font-size:11px;}
+  #muteBtn{margin-left:auto; font-size:14px; padding:2px 8px;}
+  #resetBtn:hover,#muteBtn:hover{border-color:var(--red); color:var(--red);}
+  button, input[type=range]{touch-action:manipulation;}
+  .actBtn .ac.owned{color:var(--green);}
+  @media(max-width:600px){
+    #hdr{gap:10px; padding:8px 10px;}
+    #brandName{font-size:16px;}
+    .stat{min-width:64px;}
+    .stat .val{font-size:15px;}
+    #wrap{padding:10px 10px 60px; gap:10px;}
+    #prodGrid{grid-template-columns:repeat(3,1fr);}
+    .prodCard .pinfo{display:none;}
+    #tabs button{padding:8px 8px; font-size:11px; flex:1;}
+    .frow label{width:100%;}
+    #feed{max-height:260px;}
+    #modal{padding:16px;}
+    .bigBtn{padding:16px;}
+  }
+
+  /* ---------- layout ---------- */
+  #wrap{display:grid; grid-template-columns:1fr 330px; gap:14px; padding:14px 16px 60px; max-width:1200px; margin:0 auto;}
+  @media(max-width:900px){ #wrap{grid-template-columns:1fr;} }
+  .panel{background:var(--panel); border:1px solid var(--line); padding:14px;}
+  .panel h2{font-size:14px; margin-bottom:10px; border-bottom:1px solid var(--line); padding-bottom:6px;}
+
+  /* ---------- tabs ---------- */
+  #tabs{display:flex; gap:6px; margin-bottom:12px;}
+  #tabs button{background:var(--panel2); color:var(--dim); border:1px solid var(--line); padding:8px 16px; font-family:'Archivo Black'; font-size:12px; text-transform:uppercase;}
+  #tabs button.on{background:var(--txt); color:#000; border-color:var(--txt);}
+  .tabPane{display:none;} .tabPane.on{display:block;}
+
+  /* ---------- drop designer ---------- */
+  #prodGrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; margin-bottom:14px;}
+  .prodCard{background:var(--panel2); border:2px solid var(--line); padding:10px; text-align:center; cursor:pointer; position:relative;}
+  .prodCard:hover{border-color:var(--dim);}
+  .prodCard.sel{border-color:var(--red);}
+  .prodCard.lock{opacity:.35; cursor:not-allowed;}
+  .prodCard .emoji{font-size:26px;}
+  .prodCard .pname{font-family:'Archivo Black'; font-size:11px; margin-top:4px;}
+  .prodCard .pinfo{font-size:10px; color:var(--dim); margin-top:2px;}
+  .prodCard .lockTag{position:absolute; top:4px; right:4px; font-size:9px; color:var(--gold);}
+  .prodCard .trend{position:absolute; top:4px; left:4px; font-size:9px; font-weight:700;}
+  .trend.hot{color:var(--gold);} .trend.cold{color:#7ad7ff;}
+  #legacyLine{color:var(--gold); font-size:13px; font-weight:700; letter-spacing:.05em;}
+  .frow{display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;}
+  .frow label{font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.1em; width:88px;}
+  #dropName{flex:1; min-width:160px; background:var(--panel2); border:1px solid var(--line); color:var(--txt); padding:8px 10px; font-size:15px; text-transform:uppercase;}
+  #diceBtn{background:var(--panel2); border:1px solid var(--line); color:var(--txt); padding:8px 12px; font-size:15px;}
+  input[type=range]{flex:1; min-width:140px; accent-color:var(--red);}
+  .sliderVal{font-family:'Archivo Black'; font-size:16px; min-width:74px; text-align:right;}
+  #readout{background:var(--panel2); border:1px dashed var(--line); padding:10px 12px; font-size:12px; color:var(--dim); margin-bottom:12px; line-height:1.7;}
+  #readout b{color:var(--txt);}
+  #readout .warn{color:var(--red);}
+  .bigBtn{width:100%; background:var(--red); color:#fff; border:none; padding:14px; font-family:'Archivo Black'; font-size:18px; text-transform:uppercase; letter-spacing:.05em;}
+  .bigBtn:hover{filter:brightness(1.15);}
+  .bigBtn:disabled{background:var(--panel2); color:var(--dim); cursor:not-allowed;}
+
+  /* ---------- marketing / other actions ---------- */
+  .actBtn{display:flex; justify-content:space-between; align-items:center; width:100%; background:var(--panel2); border:1px solid var(--line); color:var(--txt); padding:12px 14px; margin-bottom:8px; text-align:left;}
+  .actBtn:hover{border-color:var(--red);}
+  .actBtn:disabled{opacity:.4; cursor:not-allowed;}
+  .actBtn .an{font-family:'Archivo Black'; font-size:13px; text-transform:uppercase;}
+  .actBtn .ad{font-size:11px; color:var(--dim); margin-top:2px;}
+  .actBtn .ac{font-family:'Archivo Black'; font-size:14px; color:var(--gold); white-space:nowrap; margin-left:10px;}
+
+  /* ---------- archive ---------- */
+  .archRow{display:flex; justify-content:space-between; border-bottom:1px solid var(--line); padding:7px 2px; font-size:12px;}
+  .archRow .rn{font-weight:700; text-transform:uppercase;}
+  .archRow .rr{color:var(--dim);}
+  .resaleUp{color:var(--green); font-weight:700;}
+  .resaleDn{color:var(--red);}
+
+  /* ---------- chart ---------- */
+  .chartRow{display:flex; align-items:center; gap:8px; padding:5px 2px; border-bottom:1px solid var(--line); font-size:13px;}
+  .chartRow .pos{font-family:'Archivo Black'; width:26px; color:var(--dim); font-size:12px;}
+  .chartRow .cn{flex:1; text-transform:uppercase; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .chartRow .ch{font-size:12px; color:var(--dim); min-width:34px; text-align:right;}
+  .chartRow.me{background:rgba(255,43,43,.12);}
+  .chartRow.me .cn{color:var(--red);}
+  .mv{width:14px; text-align:center; font-size:11px;}
+  .mvU{color:var(--green);} .mvD{color:var(--red);}
+
+  /* ---------- feed ---------- */
+  #feed{max-height:400px; overflow-y:auto;}
+  .post{border-bottom:1px solid var(--line); padding:8px 2px; font-size:12.5px; line-height:1.45; animation:slideIn .3s ease;}
+  .post .who{color:var(--dim); font-weight:700;}
+  .post.hot .who{color:var(--gold);}
+  .post.sys{color:var(--dim); font-style:italic;}
+  @keyframes slideIn{from{opacity:0; transform:translateY(-6px);} to{opacity:1;}}
+
+  /* ---------- ticker ---------- */
+  #ticker{position:fixed; bottom:0; left:0; right:0; background:var(--red); color:#fff; font-family:'Archivo Black'; font-size:12px; text-transform:uppercase; overflow:hidden; white-space:nowrap; padding:6px 0; z-index:6;}
+  #tickerInner{display:inline-block; padding-left:100%; animation:tick 30s linear infinite;}
+  @keyframes tick{to{transform:translateX(-100%);}}
+
+  /* ---------- modal ---------- */
+  #modalBg{position:fixed; inset:0; background:rgba(0,0,0,.82); display:none; align-items:center; justify-content:center; z-index:20; padding:16px;}
+  #modalBg.on{display:flex;}
+  #modal{background:var(--panel); border:2px solid var(--line); max-width:520px; width:100%; padding:22px; animation:pop .22s ease; max-height:85vh; overflow-y:auto;}
+  @keyframes pop{from{transform:scale(.92); opacity:0;} to{transform:scale(1); opacity:1;}}
+  #modal h2{font-size:22px; margin-bottom:12px;}
+  #modal h2.w{color:var(--green);} #modal h2.l{color:var(--red);} #modal h2.e{color:var(--gold);}
+  #modalBody{font-size:14px; line-height:1.65; margin-bottom:16px;}
+  #modalBody .num{font-family:'Archivo Black'; font-size:15px;}
+  #modalBody .g{color:var(--green);} #modalBody .r{color:var(--red);} #modalBody .y{color:var(--gold);}
+  #modalBody .quote{background:var(--panel2); border-left:3px solid var(--line); padding:6px 10px; margin:6px 0; font-size:12.5px;}
+  #modalBtns{display:flex; flex-direction:column; gap:8px;}
+  #modalBtns button{background:var(--panel2); border:1px solid var(--line); color:var(--txt); padding:12px; font-family:'Archivo Black'; font-size:13px; text-transform:uppercase;}
+  #modalBtns button:hover{border-color:var(--red);}
+  #modalBtns button.prime{background:var(--red); border-color:var(--red); color:#fff;}
+
+  /* ---------- start screen ---------- */
+  #start{position:fixed; inset:0; background:var(--bg); z-index:30; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:18px; padding:20px; text-align:center;}
+  #start h1{font-size:min(13vw,84px); line-height:.95;}
+  #start h1 span{color:var(--red);}
+  #start p{color:var(--dim); max-width:440px; font-size:14px; line-height:1.6;}
+  #labelInput{background:var(--panel); border:2px solid var(--line); color:var(--txt); padding:14px 16px; font-size:20px; text-transform:uppercase; text-align:center; width:min(90vw,380px); font-family:'Archivo Black';}
+  #labelInput:focus{border-color:var(--red); outline:none;}
+  #start .btnRow{display:flex; gap:10px; flex-wrap:wrap; justify-content:center;}
+  #start button{padding:14px 26px; font-family:'Archivo Black'; font-size:15px; text-transform:uppercase;}
+  #startBtn{background:var(--red); border:none; color:#fff;}
+  #contBtn{background:none; border:2px solid var(--line); color:var(--txt); display:none;}
+  #randLabel{background:none; border:1px solid var(--line); color:var(--dim); font-size:12px; padding:8px 14px;}
+
+  .toast{position:fixed; top:70px; right:16px; background:var(--gold); color:#000; font-family:'Archivo Black'; font-size:13px; padding:10px 16px; z-index:25; animation:pop .25s ease;}
+
+  /* ---------- smoothness ---------- */
+  button:active{transform:scale(.97);}
+  .tabPane.on{display:block; animation:fadeUp .22s ease;}
+  @keyframes fadeUp{from{opacity:0; transform:translateY(5px);} to{opacity:1; transform:none;}}
+  .stashBtn{background:none; border:1px solid var(--gold); color:var(--gold); font-size:10px; padding:2px 7px; margin-left:6px; font-family:'Archivo Black';}
+  .stashBtn:hover{background:var(--gold); color:#000;}
+
+  /* ---------- live drop overlay ---------- */
+  #liveBg{position:fixed; inset:0; background:rgba(0,0,0,.93); display:none; align-items:center; justify-content:center; z-index:22; cursor:pointer;}
+  #liveBg.on{display:flex;}
+  #liveBox{max-width:480px; width:92%; text-align:center;}
+  #liveLabel{font-size:11px; letter-spacing:.3em; color:var(--dim); text-transform:uppercase;}
+  #liveName{font-family:'Archivo Black'; font-size:30px; margin:8px 0 10px; text-transform:uppercase;}
+  #liveCount{font-family:'Archivo Black'; font-size:46px; height:58px;}
+  #liveBarWrap{height:22px; background:var(--panel2); border:1px solid var(--line); margin:10px 0;}
+  #liveBar{height:100%; width:0%; background:linear-gradient(90deg,var(--red),#ff7a2b);}
+  #liveSold{font-family:'Archivo Black'; font-size:18px; height:24px;}
+  #liveStamp{font-family:'Archivo Black'; font-size:46px; height:64px; margin-top:6px;}
+  .stampW{color:var(--green); animation:stamp .3s cubic-bezier(.2,2,.4,1) both;}
+  .stampL{color:var(--red); animation:stamp .3s cubic-bezier(.2,2,.4,1) both;}
+  .stampE{color:var(--gold); animation:stamp .3s cubic-bezier(.2,2,.4,1) both;}
+  @keyframes stamp{from{transform:scale(2.4) rotate(-8deg); opacity:0;} to{transform:scale(1) rotate(-3deg); opacity:1;}}
+  #liveMsgs{min-height:84px; font-size:12px; color:var(--dim); text-align:left; max-width:300px; margin:8px auto 0;}
+  #liveMsgs div{animation:slideIn .2s ease;}
+  #liveSkip{font-size:10px; color:var(--dim); margin-top:14px; letter-spacing:.2em; text-transform:uppercase;}
+</style>
+</head>
+<body>
+
+<!-- START SCREEN -->
+<div id="start">
+  <h1>SELL<span>OUT</span></h1>
+  <p>The merch drop simulator. Run an underground streetwear label. Drop limited runs. Manufacture scarcity. Ride the resale market. Don't brick.</p>
+  <div id="legacyLine"></div>
+  <input id="labelInput" type="text" maxlength="18" placeholder="NAME YOUR LABEL" spellcheck="false">
+  <button id="randLabel">🎲 random name</button>
+  <div class="btnRow">
+    <button id="startBtn">START THE LABEL</button>
+    <button id="contBtn">CONTINUE SAVE</button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div id="hdr" style="display:none">
+  <div id="brandName">—</div>
+  <div class="stat"><span class="lbl">Week</span><span class="val" id="stWeek">1</span></div>
+  <div class="stat"><span class="lbl">Cash</span><span class="val" id="stCash">$0</span></div>
+  <div class="stat" id="vaultStat" style="display:none"><span class="lbl">Vault</span><span class="val" id="stVault" style="color:var(--gold)">$0</span></div>
+  <div class="stat"><span class="lbl">Burn</span><span class="val" id="stBurn" style="color:var(--red);font-size:14px">−$0/wk</span></div>
+  <div class="stat" id="hypeWrap"><span class="lbl">Hype <span id="stHypeN"></span></span><div id="hypeBar"><div id="hypeFill"></div></div></div>
+  <div id="rankChip">#—</div>
+  <button id="muteBtn" title="toggle sound">🔊</button>
+  <button id="resetBtn">reset save</button>
+</div>
+
+<!-- MAIN -->
+<div id="wrap" style="display:none">
+  <div>
+    <div id="tabs">
+      <button data-tab="drop" class="on">Drop</button>
+      <button data-tab="mkt">Hype</button>
+      <button data-tab="crew">Crew</button>
+      <button data-tab="hq">HQ</button>
+      <button data-tab="arch">Archive</button>
+    </div>
+
+    <!-- DROP TAB -->
+    <div class="tabPane panel on" id="tab-drop">
+      <h2>Design this week's drop</h2>
+      <div id="collexBox" style="display:none"></div>
+      <div id="designForm">
+      <div id="prodGrid"></div>
+      <div class="frow">
+        <label>Concept</label>
+        <div id="conceptShow" style="flex:1;min-width:150px;font-size:12px;color:var(--dim)">no concept — unvetted designs are a gamble</div>
+        <button id="sketchBtn" class="actBtn" style="width:auto;margin:0;padding:8px 12px"><span class="an">SKETCH ×3 ($300)</span></button>
+      </div>
+      <div class="frow">
+        <label>Drop name</label>
+        <input id="dropName" type="text" maxlength="26" spellcheck="false">
+        <button id="diceBtn" title="random name">🎲</button>
+      </div>
+      <div class="frow">
+        <label>Run size</label>
+        <input type="range" id="qtySlider" min="25" max="100" step="5">
+        <span class="sliderVal" id="qtyVal">25</span>
+      </div>
+      <div class="frow">
+        <label>Price</label>
+        <input type="range" id="priceSlider" min="50" max="300" step="5">
+        <span class="sliderVal" id="priceVal">$0</span>
+      </div>
+      <div class="frow">
+        <label>Vault stash</label>
+        <input type="range" id="stashSlider" min="0" max="15" step="1" value="0">
+        <span class="sliderVal" id="stashVal">0</span>
+      </div>
+      <div id="readout"></div>
+      <button class="bigBtn" id="dropBtn">DROP IT</button>
+      <button class="bigBtn" id="collexBtn" style="display:none;background:var(--panel2);color:var(--gold);border:2px solid var(--gold);margin-top:8px">START A CAPSULE COLLECTION — $800 · 3 WEEKS</button>
+      </div>
+    </div>
+
+    <!-- CREW TAB -->
+    <div class="tabPane panel" id="tab-crew">
+      <h2>The crew</h2>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:10px">Wages hit your weekly burn. Talent changes everything. Hiring is instant; keeping them is the hard part.</div>
+      <div id="crewList"></div>
+    </div>
+
+    <!-- MARKETING TAB -->
+    <div class="tabPane panel" id="tab-mkt">
+      <h2>Build hype (uses your week)</h2>
+      <div id="mktBtns"></div>
+    </div>
+
+    <!-- HQ TAB -->
+    <div class="tabPane panel" id="tab-hq">
+      <h2>Label HQ — build the empire</h2>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:10px">One-time investments. Buying doesn't use your week.</div>
+      <div id="upgList"></div>
+    </div>
+
+    <!-- ARCHIVE TAB -->
+    <div class="tabPane panel" id="tab-arch">
+      <h2>Archive &amp; stock</h2>
+      <div id="stockBox"></div>
+      <div id="archList"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel" style="margin-bottom:14px">
+      <h2>🔥 Heat 100 — brand chart</h2>
+      <div id="chart"></div>
+    </div>
+    <div class="panel">
+      <h2>The feed</h2>
+      <div id="feed"></div>
+    </div>
+  </div>
+</div>
+
+<div id="ticker"><div id="tickerInner"></div></div>
+
+<!-- LIVE DROP OVERLAY -->
+<div id="liveBg"><div id="liveBox">
+  <div id="liveLabel">DROP GOES LIVE</div>
+  <div id="liveName"></div>
+  <div id="liveCount"></div>
+  <div id="liveBarWrap"><div id="liveBar"></div></div>
+  <div id="liveSold"></div>
+  <div id="liveStamp"></div>
+  <div id="liveMsgs"></div>
+  <div id="liveSkip">tap to skip</div>
+</div></div>
+
+<!-- MODAL -->
+<div id="modalBg"><div id="modal">
+  <h2 id="modalTitle"></h2>
+  <div id="modalBody"></div>
+  <div id="modalBtns"></div>
+</div></div>
+
+<script>
+"use strict";
+/* ================= DATA ================= */
+const TYPES = [
+  {id:'cap',    name:'CAP',        emoji:'🧢', cost:10, base:35,  appeal:0.7,  unlock:0},
+  {id:'tee',    name:'TEE',        emoji:'👕', cost:13, base:44,  appeal:1.0,  unlock:0},
+  {id:'hoodie', name:'HOODIE',     emoji:'🥷', cost:32, base:98,  appeal:0.85, unlock:0},
+  {id:'deck',   name:'SKATE DECK', emoji:'🛹', cost:24, base:70,  appeal:0.6,  unlock:15},
+  {id:'jacket', name:'JACKET',     emoji:'🧥', cost:70, base:190, appeal:0.55, unlock:30},
+  {id:'sneaker',name:'SNEAKER',    emoji:'👟', cost:95, base:240, appeal:0.75, unlock:50},
+];
+const RIVALS = ['NOIR DIVISION','HEATGOD','BRICKLORD','VANDAL SUPPLY','GRAIL THEORY','SIDEWALK CULT','PRESSED','MOTHLIGHT','404 WORLDWIDE','PAPER CROWN'];
+const ADJ = ['CHROME','MIDNIGHT','ACID','GHOST','VELVET','STATIC','BURNT','NEON','BROKEN','HOLY','FERAL','GLASS','CRIMSON','DIAL-UP','WILTED'];
+const NOUN = ['TEARS','RIOT','BLOOM','YOUTH','MIRAGE','SERPENT','ORCHID','VANDAL','HALO','SCRIPTURE','ANTHEM','STATIC','PARADISE','CURFEW','RAPTURE'];
+const LABEL_A = ['DEAD','SOUR','PALE','LOUD','GUTTER','HALF','WET','LAST','FAKE','NORTH'];
+const LABEL_B = ['STOCK','THEORY','MERCY','ARCHIVE','SAINTS','MARKET','CANVAS','WORSHIP','STATIC','MILE'];
+const HANDLES = ['@hype_priestess','@gorpcore_gary','@fitpic_felon','@sellout.exe','@bricklord99','@NYCstreetsnaps','@graildigger','@resell_rat','@cousin_leon','@mall_goth_mafia','@drip_or_drown','@archive_annie'];
+
+const W_QUOTES = [
+  'W drop. Copped in 8 seconds, already framed it 🔥',
+  'this is why {L} runs the scene rn',
+  'refresh finger BROKEN but I got one. worth.',
+  'resale already stupid. shoulda bought two',
+  'the {D} might be piece of the year, no cap',
+  '{L} does not miss lately',
+];
+const L_QUOTES = [
+  'still fully stocked lol. {L} falling off?',
+  'the {D} is sitting… someone check on {L}',
+  'brick of the century 💀',
+  'who approved this run size lmaooo',
+  'saw the {D} on clearance rack energy',
+  '{L} really thought we’d all buy this',
+];
+const MID_QUOTES = [
+  'decent drop from {L}, didn’t sell out tho',
+  'the {D} is cool but the hype wasn’t there',
+  'solid piece. quiet release energy',
+];
+
+const CREW_ROLES = [
+  {id:'designer',   title:'DESIGNER',   emoji:'✂️', wageBase:250, blurb:'Better concepts, sharper hints in the sketchbook, stronger collections.'},
+  {id:'plug',       title:'THE PLUG',   emoji:'📱', wageBase:200, blurb:'Marketing hits harder and flops less.'},
+  {id:'production', title:'PRODUCTION', emoji:'🧵', wageBase:220, blurb:'−4% unit cost per skill point.'},
+];
+const CREW_NAMES = ['YUKI','MARA','DEV','OTIS','LENA','KAI','ROSCO','BIBI','JUNO','PREZ','NIA','SAGE','CROW','TITO','WREN'];
+const VIBES = ['heavy chrome metal','washed grief-core','y2k rot','brutalist florals','thrifted heaven','cyber siesta','post-apoc prep','sunbleached noir','gas station couture','angelic vandalism'];
+
+const UPGRADES = [
+  {id:'designer', emoji:'✂️', name:'HIRE A DESIGNER',  cost:15000,  desc:'A real design studio. Demand +12% on everything, forever. Upkeep $250/wk.'},
+  {id:'atelier',  emoji:'🏭', name:'IN-HOUSE ATELIER', cost:40000,  desc:'Own the production line. Unit costs −25%, forever. Upkeep $350/wk.'},
+  {id:'flagship', emoji:'🏬', name:'FLAGSHIP STORE',   cost:100000, desc:'A physical temple. Passive weekly sales: hype × $60. Upkeep $700/wk.'},
+  {id:'vault',    emoji:'🖼️', name:'ARCHIVE VAULT',    cost:250000, desc:'Your history becomes a museum. Hype decays 30% slower, +3 rep. Upkeep $250/wk.'},
+];
+
+/* ================= SFX ================= */
+let AC = null, muted = false;
+try{ muted = localStorage.getItem('sellout_mute')==='1'; }catch(e){}
+function tone(f, t0, dur, type, vol){
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type||'square'; o.frequency.value = f;
+  g.gain.setValueAtTime(vol||0.07, AC.currentTime+t0);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime+t0+dur);
+  o.connect(g); g.connect(AC.destination);
+  o.start(AC.currentTime+t0); o.stop(AC.currentTime+t0+dur+0.05);
+}
+function sfx(kind){
+  if(muted) return;
+  try{
+    AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==='suspended') AC.resume();
+    if(kind==='sellout')     [523,659,784,1047].forEach((f,i)=>tone(f, i*0.07, 0.15));
+    else if(kind==='cash')   { tone(988,0,0.08); tone(1319,0.08,0.18); }
+    else if(kind==='brick')  { tone(220,0,0.3,'sawtooth',0.09); tone(150,0.15,0.45,'sawtooth',0.09); }
+    else if(kind==='event')  { tone(440,0,0.1,'triangle'); tone(554,0.1,0.15,'triangle'); }
+    else if(kind==='grail')  [523,659,784,1047,1319].forEach((f,i)=>tone(f, i*0.12, 0.3, 'triangle', 0.09));
+    else if(kind==='tick')   tone(660, 0, 0.04, 'square', 0.025);
+  }catch(e){}
+}
+
+/* ================= STATE ================= */
+let S = null;
+const SAVE_KEY = 'sellout_save_v1';
+const LEGACY_KEY = 'sellout_legacy_v1';
+function loadLegacy(){
+  try{ const j = localStorage.getItem(LEGACY_KEY); const L = j? JSON.parse(j):null;
+    return (L && typeof L.crowns==='number')? L : {crowns:0, labels:[]};
+  }catch(e){ return {crowns:0, labels:[]}; }
+}
+function saveLegacy(L){ try{ localStorage.setItem(LEGACY_KEY, JSON.stringify(L)); }catch(e){} }
+const rand = (a,b)=>a+Math.random()*(b-a);
+const ri = (a,b)=>Math.floor(rand(a,b+1));
+const pick = a=>a[Math.floor(Math.random()*a.length)];
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const fmt$ = n=>'$'+Math.round(n).toLocaleString('en-US');
+const el = id=>document.getElementById(id);
+
+function newGame(label){
+  const L = loadLegacy();
+  const startCash = 3000 + L.crowns*2000;
+  const startHype = Math.min(8 + L.crowns*3, 25);
+  const startRep  = Math.min(L.crowns, 5);
+  const hot = pick(TYPES).id;
+  S = {
+    label, week:1, cash:startCash, hype:startHype, rep:startRep,
+    lastTypeId:null, typeStreak:0, upgrades:{}, debtWeeks:0,
+    crew:{designer:null, plug:null, production:null},
+    collection:null, pendingConcept:null,
+    trendHot:hot, trendCold:pick(TYPES.filter(t=>t.id!==hot)).id,
+    stock:null,               // {name,type,units,price}
+    drops:[],                 // archive
+    rivals: RIVALS.map((n,i)=>({name:n, hype: clamp(ri(6,70)+ (i<3?15:0),5,90), prev:0})),
+    flags:{}, feed:[], ticker:[],
+    stats:{peakHype:startHype, bestRank:11, revenue:0, bestResale:1, dropsCount:0},
+    prevRank:null,
+  };
+  S.rivals.forEach(r=>r.prev=r.hype);
+  addPost('sys', null, `${label} founded. One sewing machine, one dream, ${fmt$(startCash)}.`);
+  if(L.crowns>0) addPost('sys', null, `The founder's ${L.crowns} retired legend${L.crowns>1?'s':''} still open doors. 👑`);
+  addTicker(`NEW LABEL ALERT: ${label} enters the scene`);
+}
+
+/* ================= FEED / TICKER ================= */
+function addPost(cls, who, text){
+  S.feed.unshift({cls, who, text});
+  if(S.feed.length>40) S.feed.pop();
+}
+function addTicker(t){
+  S.ticker.unshift(t);
+  if(S.ticker.length>7) S.ticker.pop();
+}
+function quote(tmpl, dropName){
+  return tmpl.replaceAll('{L}', S.label).replaceAll('{D}', dropName||'drop');
+}
+
+/* ================= CORE MATH ================= */
+const audience = ()=> (40 + S.hype*16 + S.rep*6) * (S.upgrades.designer?1.12:1);
+function priceFactor(type, price){
+  const r = price/type.base;
+  return r<=1 ? 1+(1-r)*0.5 : Math.max(0.05, 1-(r-1)*1.1);
+}
+function maxUnits(){ return 30 + Math.floor(S.hype*6); }
+function crewSkill(role){ return (S.crew && S.crew[role])? S.crew[role].skill : 0; }
+function crewWages(){
+  return CREW_ROLES.reduce((a,r)=>a+((S.crew && S.crew[r.id])? S.crew[r.id].wage:0), 0);
+}
+function weeklyBurn(){
+  return 150 + Math.round(S.hype*6) + crewWages()
+    + (S.upgrades.designer?250:0) + (S.upgrades.atelier?350:0)
+    + (S.upgrades.flagship?700:0) + (S.upgrades.vault?250:0);
+}
+function stars(q){ const n=clamp(Math.round((q-0.5)/0.25),1,5); return '★'.repeat(n)+'☆'.repeat(5-n); }
+function unitCost(type){ return type.cost * (S.flags.costSpike?1.35:1) * (S.upgrades.atelier?0.75:1) * (1 - 0.04*crewSkill('production')); }
+function fatigueFactor(type){
+  return type.id===S.lastTypeId ? Math.pow(0.78, Math.min(S.typeStreak||0, 3)) : 1;
+}
+function trendFactor(type){
+  return S.trendHot===type.id ? 1.4 : S.trendCold===type.id ? 0.7 : 1;
+}
+function rerollTrends(){
+  const hot = pick(TYPES).id;
+  if(hot===S.trendHot) return;
+  S.trendHot = hot;
+  S.trendCold = pick(TYPES.filter(t=>t.id!==hot)).id;
+  const tn = TYPES.find(t=>t.id===hot).name;
+  addTicker(`THE SCENE IS ALL ABOUT ${tn}S RIGHT NOW`);
+  addPost('sys', null, `Trend shift: ${tn.toLowerCase()}s are in, ${TYPES.find(t=>t.id===S.trendCold).name.toLowerCase()}s are out.`);
+}
+function estDemand(type, price, q){
+  let base = audience()*type.appeal*priceFactor(type,price)*fatigueFactor(type)*trendFactor(type)*(q||1);
+  if(S.flags.leaked) base*=0.75;
+  return [Math.round(base*0.55), Math.round(base*1.6)];
+}
+function rollDemand(type, price, q){
+  let base = audience()*type.appeal*priceFactor(type,price)*fatigueFactor(type)*trendFactor(type)*(q||1);
+  if(S.flags.leaked) base*=0.75;
+  let d = base*rand(0.65,1.45);
+  let viral = false;
+  if(Math.random()<0.07){ d*=2.5; viral = true; }
+  return {demand:Math.max(0,Math.round(d)), viral};
+}
+
+/* ================= RENDER ================= */
+let selType = TYPES[1];
+let dispCash = null, cashAnim = null;
+function setCash(target){
+  const c = el('stCash');
+  if(dispCash===null){ dispCash = target; c.textContent = fmt$(target); return; }
+  if(Math.abs(dispCash-target)<1){ dispCash = target; c.textContent = fmt$(target); return; }
+  const from = dispCash;
+  if(cashAnim) cancelAnimationFrame(cashAnim);
+  const t0 = performance.now(), dur = 600;
+  const step = (t)=>{
+    const p = Math.min(1,(t-t0)/dur), e = 1-Math.pow(1-p,3);
+    dispCash = from+(target-from)*e;
+    c.textContent = fmt$(dispCash);
+    if(p<1) cashAnim = requestAnimationFrame(step); else cashAnim=null;
+  };
+  cashAnim = requestAnimationFrame(step);
+}
+function vaultValue(){
+  return S.drops.reduce((a,d)=>a+(d.stash||0)*(d.retail||0)*(d.resaleNow||1), 0);
+}
+function render(){
+  el('brandName').textContent = S.label;
+  el('stWeek').textContent = S.week;
+  setCash(S.cash);
+  el('stCash').style.color = S.cash<0? 'var(--red)':'';
+  el('stBurn').textContent = '−'+fmt$(weeklyBurn())+'/wk';
+  const vv = vaultValue();
+  el('vaultStat').style.display = vv>0? 'flex':'none';
+  if(vv>0) el('stVault').textContent = fmt$(vv);
+  el('stHypeN').textContent = Math.round(S.hype);
+  el('hypeFill').style.width = clamp(S.hype,0,100)+'%';
+  el('rankChip').textContent = '#'+myRank()+' HEAT';
+  renderProds(); syncSliderBounds(); renderSliders(); renderChart(); renderFeed(); renderMkt(); renderCrew(); renderCollex(); renderHQ(); renderArchive(); renderTicker();
+}
+function renderProds(){
+  const g = el('prodGrid'); g.innerHTML='';
+  TYPES.forEach(t=>{
+    const locked = S.hype < t.unlock && !S.flags['seen_'+t.id];
+    if(S.hype>=t.unlock) S.flags['seen_'+t.id]=true;
+    const d = document.createElement('div');
+    d.className = 'prodCard'+(t===selType?' sel':'')+(locked?' lock':'');
+    const trend = !locked && S.trendHot===t.id ? '<div class="trend hot">🔥 HOT</div>'
+                : !locked && S.trendCold===t.id ? '<div class="trend cold">🧊 COLD</div>' : '';
+    d.innerHTML = `<div class="emoji">${t.emoji}</div><div class="pname">${t.name}</div>
+      <div class="pinfo">${locked?'???':`cost ${fmt$(unitCost(t))}/u · msrp ${fmt$(t.base)}`}</div>
+      ${trend}${locked?`<div class="lockTag">🔒 ${t.unlock} HYPE</div>`:''}`;
+    if(!locked) d.onclick = ()=>{ selType=t; syncSliderBounds(); render(); };
+    g.appendChild(d);
+  });
+}
+function syncSliderBounds(){
+  const q = el('qtySlider'), p = el('priceSlider');
+  const collexMult = (S.collection && S.collection.ready)? 2 : 1;
+  q.min = 25; q.max = Math.max(30, maxUnits()*collexMult);
+  if(+q.value>+q.max) q.value=q.max;
+  p.min = Math.max(5, Math.round(selType.base*0.5/5)*5);
+  p.max = Math.round(selType.base*3/5)*5;
+  const cur = +p.value;
+  if(cur < +p.min || cur > +p.max) p.value = selType.base;
+}
+function renderSliders(){
+  const qty = +el('qtySlider').value, price = +el('priceSlider').value;
+  const st = el('stashSlider');
+  st.max = Math.min(15, Math.max(0, qty-20));
+  if(+st.value > +st.max) st.value = st.max;
+  const stash = +st.value;
+  const avail = qty - stash;
+  el('qtyVal').textContent = qty+' pcs';
+  el('priceVal').textContent = fmt$(price);
+  el('stashVal').textContent = stash? stash+' pcs 🔐' : 'none';
+  const prodCost = unitCost(selType)*qty;
+  const relC = S.collection && S.collection.ready? S.collection : null;
+  const hintQ = relC? (0.8 + relC.quality*0.25)*1.5 : (S.pendingConcept? S.pendingConcept.hintQ : 0.9);
+  const [lo,hi] = estDemand(selType, price, hintQ);
+  const afford = S.cash >= prodCost;
+  el('conceptShow').innerHTML = S.pendingConcept
+    ? `<b style="color:var(--txt)">${S.pendingConcept.name}</b> — “${S.pendingConcept.vibe}” · read: <span style="color:var(--gold)">${stars(S.pendingConcept.hintQ)}</span>`
+    : 'no concept — unvetted designs are a gamble';
+  el('sketchBtn').disabled = S.cash < 300;
+  el('readout').innerHTML =
+    `PRODUCTION COST: <b class="${afford?'':'warn'}">${fmt$(prodCost)}</b> &nbsp;·&nbsp; IF IT SELLS OUT: <b>${fmt$(avail*price - prodCost)} profit</b>` +
+    (stash? ` &nbsp;·&nbsp; 🔐 <b>${stash} held back</b> (${avail} hit the site — stash rides the resale market)`:'') + `<br>` +
+    `STREET READ: roughly <b>${lo}–${hi} heads</b> want this at ${fmt$(price)}` +
+    (S.flags.leaked ? ' <span class="warn">(design leaked — demand hit)</span>':'') +
+    (S.flags.costSpike ? ' <span class="warn">(fabric prices spiked +35%)</span>':'') +
+    (fatigueFactor(selType)<1 ? ` <span class="warn">(another ${selType.name.toLowerCase()}? the scene is getting bored)</span>`:'') +
+    (S.trendHot===selType.id ? ' <span style="color:var(--gold)">(🔥 trending — demand +40%)</span>'
+     : S.trendCold===selType.id ? ' <span style="color:#7ad7ff">(🧊 out of season — demand −30%)</span>':'') +
+    `<br>Undersupply = instant sellout, hype + resale. Oversupply = a brick.`;
+  el('dropBtn').disabled = !afford || S.stock!==null;
+  el('dropBtn').textContent = S.stock!==null ? 'CLEAR OLD STOCK FIRST (ARCHIVE TAB)'
+    : !afford? 'CAN’T AFFORD THIS RUN'
+    : relC? '👑 RELEASE '+relC.name : 'DROP IT';
+  el('collexBtn').style.display = (S.hype>=25 && !S.collection)? 'block':'none';
+  el('collexBtn').disabled = S.cash < 800;
+}
+function myRank(){
+  return 1 + S.rivals.filter(r=>r.hype > S.hype).length;
+}
+function renderChart(){
+  const all = [...S.rivals.map(r=>({name:r.name,hype:r.hype,prev:r.prev,me:false})),
+               {name:S.label,hype:S.hype,prev:S.prevHype??S.hype,me:true}]
+    .sort((a,b)=>b.hype-a.hype);
+  el('chart').innerHTML = all.map((b,i)=>{
+    const mv = b.hype - b.prev;
+    const arrow = mv>1.2?'<span class="mv mvU">▲</span>':mv<-1.2?'<span class="mv mvD">▼</span>':'<span class="mv">·</span>';
+    return `<div class="chartRow${b.me?' me':''}"><span class="pos">${i+1}</span>${arrow}<span class="cn">${b.name}</span><span class="ch">${Math.round(b.hype)}°</span></div>`;
+  }).join('');
+}
+function renderFeed(){
+  el('feed').innerHTML = S.feed.map(p=>
+    p.cls==='sys' ? `<div class="post sys">${p.text}</div>`
+    : `<div class="post ${p.cls}"><span class="who">${p.who}</span> ${p.text}</div>`
+  ).join('');
+}
+function renderTicker(){
+  const items = S.ticker.length? S.ticker : ['SELLOUT — the merch drop simulator'];
+  el('tickerInner').textContent = ' +++ ' + items.join(' +++ ') + ' +++ ' + items.join(' +++ ');
+}
+function renderMkt(){
+  const M = [
+    {id:'seed', n:'Seed to influencers', d:'Mail free pieces to micro-influencers. Might spark, might get ignored.', c:500},
+    {id:'guerrilla', n:'Guerrilla campaign', d:'Wheatpaste posters, sticker bombs, cryptic billboards.', c:1500},
+    {id:'popup', n:'Pop-up teaser', d:'One-night pop-up. Line around the block or empty room.', c:4000, unlock:25},
+    {id:'hustle', n:'Side hustle', d:'Flip vintage on the side. +$500, but the label goes quiet.', c:0},
+  ];
+  el('mktBtns').innerHTML='';
+  M.forEach(m=>{
+    if(m.unlock && S.hype<m.unlock) return;
+    const b = document.createElement('button');
+    b.className='actBtn';
+    b.innerHTML = `<span><span class="an">${m.n}</span><br><span class="ad">${m.d}</span></span><span class="ac">${m.c?fmt$(m.c):'+$500'}</span>`;
+    b.disabled = m.c>0 && S.cash < m.c;
+    b.onclick = ()=>doMarketing(m.id, m.c);
+    el('mktBtns').appendChild(b);
+  });
+}
+function renderHQ(){
+  el('upgList').innerHTML='';
+  if(S.flags.grail){
+    const rb = document.createElement('button');
+    rb.className='actBtn';
+    rb.style.borderColor='var(--gold)';
+    rb.innerHTML = `<span><span class="an" style="color:var(--gold)">👑 RETIRE INTO LEGEND</span><br><span class="ad">End the run at the top. +1 crown — permanent head start for every future label.</span></span><span class="ac owned">FOREVER</span>`;
+    rb.onclick = ()=>showModal('RETIRE '+S.label+'?', 'e',
+      'Walk away at the peak. The archive gets sealed, the legend becomes permanent.<br><br>'+runStats(),
+      [{label:'KEEP RUNNING', run:null},{label:'RETIRE 👑', run:retireLabel}]);
+    el('upgList').appendChild(rb);
+  }
+  UPGRADES.forEach(u=>{
+    const owned = !!S.upgrades[u.id];
+    const b = document.createElement('button');
+    b.className='actBtn';
+    b.innerHTML = `<span><span class="an">${u.emoji} ${u.name}</span><br><span class="ad">${u.desc}</span></span><span class="ac${owned?' owned':''}">${owned?'OWNED':fmt$(u.cost)}</span>`;
+    b.disabled = owned || S.cash < u.cost;
+    if(owned) b.style.borderColor = 'var(--green)';
+    b.onclick = ()=>buyUpgrade(u.id);
+    el('upgList').appendChild(b);
+  });
+}
+function buyUpgrade(id){
+  const u = UPGRADES.find(x=>x.id===id);
+  if(!u || S.upgrades[id] || S.cash < u.cost) return;
+  S.cash -= u.cost;
+  S.upgrades[id] = true;
+  if(id==='vault') S.rep = clamp(S.rep+3, 0, 10);
+  sfx('cash');
+  toast(u.name+' ACQUIRED');
+  addPost('sys', null, `${S.label} invests: ${u.name.toLowerCase()}.`);
+  addTicker(`${S.label} OPENS ${u.name}`);
+  save(); render();
+}
+function renderArchive(){
+  const sb = el('stockBox');
+  if(S.stock){
+    const v = stockValue(0.12);
+    sb.innerHTML = `<div class="archRow"><span class="rn">📦 ${S.stock.units}× ${S.stock.name}</span>
+      <button class="actBtn" style="width:auto;margin:0;padding:6px 12px" id="outletBtn"><span class="an">Outlet dump (+${fmt$(v)}, −3 hype)</span></button></div>`;
+    el('outletBtn').onclick = doOutlet;
+  } else sb.innerHTML = '<div class="archRow rr" style="color:var(--dim)">No unsold stock. Clean.</div>';
+  const vv = vaultValue();
+  const vaultLine = vv>0? `<div class="archRow"><span class="rn" style="color:var(--gold)">🔐 VAULT HOLDINGS</span><span class="rr resaleUp">${fmt$(vv)}</span></div>`:'';
+  el('archList').innerHTML = vaultLine + (S.drops.map((d,i)=>({d,i})).reverse().map(({d,i})=>{
+    const rn = d.resaleNow!==undefined? d.resaleNow : d.resale;
+    const mv = d.prevResale!==undefined? rn-d.prevResale : 0;
+    const arrow = mv>0.03? '<span class="resaleUp">▲</span>' : mv<-0.03? '<span class="resaleDn">▼</span>' : '·';
+    const priceTag = d.retail? ` (${fmt$(d.retail*rn)})`:'';
+    const cls2 = rn>=1.5? 'resaleUp' : rn<1? 'resaleDn' : '';
+    const stashBtn = d.stash? `<button class="stashBtn" data-i="${i}">SELL ${d.stash} · ${fmt$(Math.round(d.stash*d.retail*rn))}</button>`:'';
+    return `<div class="archRow"><span class="rn">${d.name}${d.stash?' 🔐':''}</span><span class="rr">wk${d.week} · ${arrow} <span class="${cls2}">${rn.toFixed(1)}x</span>${priceTag}${stashBtn}</span></div>`;
+  }).join('') || '<div class="archRow" style="color:var(--dim)">No drops yet. The archive starts now.</div>');
+  document.querySelectorAll('.stashBtn').forEach(b=>{ b.onclick = ()=>sellStash(+b.dataset.i); });
+}
+function sellStash(i){
+  const d = S.drops[i];
+  if(!d || !d.stash) return;
+  const val = Math.round(d.stash*(d.retail||0)*(d.resaleNow||1));
+  S.cash += val;
+  S.stats.revenue += val;
+  d.stash = 0;
+  sfx('cash');
+  if(Math.random()<0.15){
+    S.hype = clamp(S.hype-4, 0, 100);
+    addPost('', pick(HANDLES), quote('lmao {L} got caught flipping their own stash. shameless',''));
+    addTicker(`${S.label} CAUGHT RESELLING THEIR OWN STOCK`);
+    toast('SOLD +'+fmt$(val)+' — BUT YOU GOT CAUGHT (−4 HYPE)');
+  } else {
+    toast('STASH FLIPPED +'+fmt$(val));
+  }
+  save(); render();
+}
+
+/* ================= MODAL ================= */
+function showModal(title, cls, html, buttons){
+  el('modalTitle').textContent = title;
+  el('modalTitle').className = cls||'';
+  el('modalBody').innerHTML = html;
+  const bx = el('modalBtns'); bx.innerHTML='';
+  buttons.forEach((b,i)=>{
+    const btn = document.createElement('button');
+    btn.textContent = b.label;
+    if(i===0) btn.classList.add('prime');
+    btn.onclick = ()=>{ el('modalBg').classList.remove('on'); if(b.run) b.run(); };
+    bx.appendChild(btn);
+  });
+  el('modalBg').classList.add('on');
+}
+function toast(msg){
+  const t = document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2600);
+}
+
+/* ================= ACTIONS ================= */
+function doDrop(){
+  const qty = +el('qtySlider').value, price = +el('priceSlider').value;
+  const stash = Math.min(+el('stashSlider').value, Math.max(0, qty-20));
+  const avail = qty - stash;
+  const relC = S.collection && S.collection.ready? S.collection : null;
+  const name = relC? relC.name : (el('dropName').value.trim() || randDropName()).toUpperCase();
+  const type = selType;
+  const cost = unitCost(type)*qty;
+  if(S.cash < cost || S.stock) return;
+  S.cash -= cost;
+  const q = relC? (0.8 + relC.quality*0.25)*1.5
+          : S.pendingConcept? S.pendingConcept.q
+          : rand(0.55,1.25);
+  const {demand, viral} = rollDemand(type, price, q);
+  S.flags.leaked = false;
+  S.flags.costSpike = false;
+  const fullName = relC? name : `${name} ${type.name}`;
+  let html='', title='', cls='', resale=1, sold=0, hypeD=0;
+
+  if(type.id===S.lastTypeId) S.typeStreak=(S.typeStreak||0)+1; else { S.typeStreak=1; S.lastTypeId=type.id; }
+
+  if(demand >= avail){
+    sold = avail;
+    const ratio = demand/avail;
+    hypeD = clamp(Math.round((2 + 4*Math.log2(ratio) + Math.min(6, avail/80)) * (1 - S.hype/140)), 1, 15);
+    resale = Math.min(8, 1 + (ratio-1)*0.55);
+    const speed = ratio>=3?'in 11 seconds':ratio>=2?'in 4 minutes':ratio>=1.3?'within the hour':'by end of day';
+    S.cash += sold*price;
+    S.hype = clamp(S.hype+hypeD, 0, 100);
+    title = 'SOLD OUT'; cls='w';
+    html = `<b>${fullName}</b> sold out ${speed}.${viral?' <span class="y">IT WENT VIRAL.</span>':''}<br><br>
+      <span class="num g">+${fmt$(sold*price)}</span> revenue · <span class="num g">+${hypeD} hype</span><br>
+      Resale price already at <span class="num y">${fmt$(price*resale)}</span> (${resale.toFixed(1)}x)` +
+      (stash? `<br>🔐 Your ${stash}-piece stash is already worth <span class="num y">${fmt$(Math.round(stash*price*resale))}</span>`:'');
+    const n = ratio>=2?3:2;
+    for(let i=0;i<n;i++) addPost(ratio>=2?'hot':'', pick(HANDLES), quote(pick(W_QUOTES), fullName));
+    if(resale>=2) addTicker(`${S.label} ${type.name} RESELLING AT ${resale.toFixed(1)}X`);
+    if(viral) addTicker(`${S.label} DROP BREAKS THE INTERNET`);
+  } else {
+    // no sellout = no frenzy: lurkers wait for clearance instead of buying
+    const interest = avail? demand/avail : 0;
+    sold = Math.min(avail, Math.round(demand*(0.35 + 0.5*interest)));
+    S.cash += sold*price;
+    const left = avail - sold;
+    const net = sold*price - cost;
+    const netLine = net>=0? `<span class="num g">+${fmt$(net)} net</span>` : `<span class="num r">−${fmt$(-net)} LOST</span>`;
+    if(interest>=0.85){ hypeD = 1; title='NEARLY SOLD OUT'; cls='e';
+      html = `<b>${fullName}</b> moved ${sold}/${avail}. So close.<br><br>${netLine} · <span class="num">+1 hype</span> · ${left} pcs left in the back room.`;
+      addPost('', pick(HANDLES), quote(pick(MID_QUOTES), fullName));
+    } else if(interest>=0.55){ hypeD = -2; title='IT SAT'; cls='e';
+      html = `<b>${fullName}</b> moved ${sold}/${avail}. No line, no frenzy — and once that's obvious, everyone waits for clearance.<br><br>${netLine} · <span class="num r">−2 hype</span> · ${left} pcs unsold.`;
+      addPost('', pick(HANDLES), quote(pick(MID_QUOTES), fullName));
+    } else { hypeD = -Math.round(5 + (1-interest)*6); title='BRICK.'; cls='l';
+      html = `<b>${fullName}</b> moved just ${sold}/${avail}. The moment it didn't sell out, even the interested buyers backed off to wait for clearance.<br><br>${netLine} · <span class="num r">${hypeD} hype</span> · ${left} pcs of shame in storage.`;
+      addPost('', pick(HANDLES), quote(pick(L_QUOTES), fullName));
+      addPost('', pick(HANDLES), quote(pick(L_QUOTES), fullName));
+      addTicker(`${S.label} DROP BRICKS PUBLICLY`);
+    }
+    S.hype = clamp(S.hype+hypeD, 0, 100);
+    resale = Math.max(0.4, Math.min(1, interest));
+    if(left>0) S.stock = {name:fullName, type:type.id, units:left, price};
+  }
+  // collection releases swing twice as hard, both ways
+  if(relC){
+    hypeD = Math.round(hypeD * 1.8);
+    S.hype = clamp(S.hype + (hypeD - Math.round(hypeD/1.8)), 0, 100);
+    html += `<br>👑 CAPSULE RELEASE — the hype swing hits <b>${hypeD>=0?'+':''}${hypeD}</b> total.`;
+    S.collection = null;
+    addTicker(cls==='w'? `${S.label} CAPSULE CEMENTS THEIR NAME` : `${S.label} CAPSULE FLOPS AFTER WEEKS OF TEASING`);
+  }
+  const qStars = stars(relC? Math.min(1.7, q/1.5) : q);
+  html += `<br>DESIGN VERDICT: <span class="y">${qStars}</span>`;
+  S.drops.push({name:fullName, week:S.week, qty, sold, resale, resaleNow:resale, retail:price, stash, prevResale:resale});
+  S.stats.dropsCount++;
+  S.stats.revenue += sold*price;
+  S.stats.bestResale = Math.max(S.stats.bestResale, resale);
+  S.pendingConcept = null;
+  el('dropName').value='';
+  el('stashSlider').value = 0;
+  playDropLive({name:fullName, avail, sold, ratio: avail? demand/avail:0, soldOut: demand>=avail}, ()=>{
+    sfx(cls==='w' ? 'sellout' : cls==='l' ? 'brick' : 'cash');
+    showModal(title, cls, html, [{label:'NEXT WEEK →', run:endWeek}]);
+  });
+}
+
+/* ================= LIVE DROP ANIMATION ================= */
+let liveTimers = [], liveDone = null;
+function playDropLive(d, done){
+  const bg = el('liveBg');
+  el('liveName').textContent = d.name;
+  el('liveCount').textContent = ''; el('liveCount').style.color = '';
+  el('liveSold').textContent = '';
+  el('liveStamp').textContent = ''; el('liveStamp').className = '';
+  el('liveMsgs').innerHTML = '';
+  const bar = el('liveBar');
+  bar.style.transition = 'none'; bar.style.width = '0%'; bar.style.background = '';
+  bg.classList.add('on');
+  const finish = ()=>{
+    liveTimers.forEach(clearTimeout); liveTimers = [];
+    liveDone = null;
+    bg.classList.remove('on');
+    done();
+  };
+  liveDone = finish;
+  const T = (fn,ms)=>liveTimers.push(setTimeout(fn,ms));
+  // countdown
+  ['3','2','1','LIVE'].forEach((c,i)=>T(()=>{
+    el('liveCount').textContent = c;
+    if(c==='LIVE') el('liveCount').style.color = 'var(--red)';
+    sfx('tick');
+  }, 420*i));
+  const start = 1900;
+  const pct = d.soldOut? 100 : Math.round(100*d.sold/Math.max(1,d.avail));
+  const dur = d.soldOut? (d.ratio>=3? 900 : 1600) : 2400;
+  T(()=>{
+    bar.style.transition = `width ${dur}ms ${d.soldOut?'cubic-bezier(.55,0,.8,.3)':'cubic-bezier(.2,.8,.4,1)'}`;
+    bar.style.width = pct+'%';
+    const t0 = performance.now();
+    const tickFn = ()=>{
+      if(!liveDone) return;
+      const p = Math.min(1,(performance.now()-t0)/dur);
+      const e = d.soldOut? p*p : 1-Math.pow(1-p,2);
+      el('liveSold').textContent = Math.round(e*d.sold)+' / '+d.avail+' SOLD';
+      if(p<1) requestAnimationFrame(tickFn);
+    };
+    requestAnimationFrame(tickFn);
+    const msgs = d.soldOut
+      ? ['COPPED ✅','W DROP 🔥','site is LAGGING','got two 😤','bots everywhere rn']
+      : ['copped one','hmm','still in stock lol','not for me tbh','sitting…'];
+    msgs.slice(0, d.soldOut?5:4).forEach((m,i)=>T(()=>{
+      const p = document.createElement('div');
+      p.textContent = pick(HANDLES)+': '+m;
+      el('liveMsgs').appendChild(p);
+      sfx('tick');
+    }, (dur/5)*(i+0.6)));
+  }, start);
+  T(()=>{
+    const st = el('liveStamp');
+    if(d.soldOut){ st.textContent='SOLD OUT'; st.className='stampW'; }
+    else if(d.ratio>=0.85){ st.textContent='SO CLOSE'; st.className='stampE'; }
+    else if(d.ratio>=0.55){ st.textContent='IT SAT'; st.className='stampE'; }
+    else { st.textContent='BRICK'; st.className='stampL'; bar.style.background='var(--dim)'; }
+  }, start+dur+120);
+  T(finish, start+dur+1250);
+  bg.onclick = ()=>{ if(liveDone) liveDone(); };
+}
+
+function doMarketing(id, cost){
+  if(cost>0 && S.cash < cost) return;
+  S.cash -= cost;
+  let html='', title='', cls='e';
+  const pl = crewSkill('plug');
+  if(id==='seed'){
+    const roll = Math.random();
+    if(roll < 0.10+pl*0.03){ const g=ri(12,18)+pl; S.hype=clamp(S.hype+g,0,100); title='IT SPARKED'; cls='w';
+      html=`A mid-tier streamer wore your piece on cam for 6 hours. <span class="num g">+${g} hype</span>`;
+      addTicker(`${S.label} PIECE SPOTTED ON STREAM`);
+    } else if(roll < 0.65+pl*0.04){ const g=ri(3,8)+pl; S.hype=clamp(S.hype+g,0,100); title='SOME TRACTION';
+      html=`A few fit pics got posted. <span class="num g">+${g} hype</span>`;
+    } else { title='CRICKETS.'; cls='l'; html='The packages arrived. Nobody posted. <span class="num r">$500 gone.</span>'; }
+  } else if(id==='guerrilla'){
+    const g=ri(4,9)+pl; S.hype=clamp(S.hype+g,0,100); title='THE STREETS NOTICED'; cls='w';
+    html=`Your posters are all over the city. <span class="num g">+${g} hype</span>`;
+  } else if(id==='popup'){
+    const g=ri(8,15)+pl; S.hype=clamp(S.hype+g,0,100); title='LINE AROUND THE BLOCK'; cls='w';
+    html=`The pop-up popped. <span class="num g">+${g} hype</span>`;
+    if(Math.random()<0.3){ S.rep=clamp(S.rep+1,0,10); html+=' · <span class="num y">+1 rep</span>'; }
+    addTicker(`${S.label} POP-UP DRAWS CROWDS`);
+  } else if(id==='hustle'){
+    S.cash += 500; title='QUIET WEEK'; html='You flipped vintage all week. <span class="num g">+$500</span>. The label stayed silent.';
+  }
+  addPost('sys', null, `${S.label}: ${title.toLowerCase()}`);
+  if(cls==='w') sfx('cash');
+  showModal(title, cls, html, [{label:'NEXT WEEK →', run:endWeek}]);
+}
+
+function stockValue(frac){
+  if(!S.stock) return 0;
+  const base = (TYPES.find(x=>x.id===S.stock.type)||{base:S.stock.price}).base;
+  return Math.round(S.stock.units*base*frac);
+}
+function doOutlet(){
+  if(!S.stock) return;
+  const v = stockValue(0.12);
+  S.cash += v;
+  S.hype = clamp(S.hype-3, 0, 100);
+  addPost('', pick(HANDLES), quote('caught the {L} outlet dump… grail status revoked', ''));
+  S.stock = null;
+  sfx('cash');
+  showModal('STOCK DUMPED', 'e', `Moved everything through the outlet. <span class="num g">+${fmt$(v)}</span> · <span class="num r">−3 hype</span>`, [{label:'NEXT WEEK →', run:endWeek}]);
+}
+
+/* ================= SKETCHBOOK ================= */
+function sketchConcepts(){
+  if(S.cash < 300) return;
+  S.cash -= 300;
+  const sk = crewSkill('designer');
+  const opts = [0,1,2].map(()=>{
+    const q = clamp(rand(0.6,1.45) + sk*0.05, 0.5, 1.7);
+    const noise = (1.6 - sk*0.26) * 0.25;
+    const hintQ = clamp(q + rand(-noise, noise)*2, 0.5, 1.7);
+    return {name:randDropName(), q, hintQ, vibe:pick(VIBES)};
+  });
+  sfx('event');
+  showModal('THE SKETCHBOOK', 'e',
+    'Three concepts hit the table.' + (sk? ` Your designer (★${sk}) rates them — the better they are, the closer the read.` : ' No designer on staff — these star ratings are pure vibes.'),
+    opts.map(o=>({label:`${o.name} — “${o.vibe}” · ${stars(o.hintQ)}`, run:()=>{
+      S.pendingConcept = o;
+      el('dropName').value = o.name;
+      save(); render();
+    }})).concat([{label:'SCRAP THEM ALL', run:()=>{ save(); render(); }}]));
+}
+
+/* ================= CAPSULE COLLECTION ================= */
+function startCollection(){
+  if(S.cash < 800 || S.collection) return;
+  S.cash -= 800;
+  const nm = (el('dropName').value.trim() || randDropName()).toUpperCase() + ' CAPSULE';
+  S.collection = {name:nm, weeks:0, quality: 0.5 + crewSkill('designer')*0.2, ready:false};
+  addTicker(`${S.label} TEASES “${nm}”`);
+  addPost('sys', null, `Work begins on ${nm}. The studio goes dark. No drops until it's done.`);
+  sfx('event');
+  save();
+  endWeek();
+}
+function collexWork(kind){
+  const c = S.collection;
+  if(!c || c.ready) return;
+  if(kind==='invest'){ if(S.cash<1500) return; S.cash-=1500; c.quality += 0.9; }
+  else if(kind==='rush'){ c.quality -= 0.7; c.weeks = 2; }
+  else { c.quality += 0.35 + crewSkill('designer')*0.12; }
+  c.weeks++;
+  if(c.weeks>=2){
+    c.ready = true;
+    addTicker(`“${c.name}” IS READY`);
+    toast('COLLECTION READY — RELEASE IT FROM THE DROP TAB');
+    sfx('cash');
+  }
+  save();
+  endWeek();
+}
+function renderCollex(){
+  const c = S.collection;
+  const inWork = c && !c.ready;
+  el('collexBox').style.display = inWork? 'block':'none';
+  el('designForm').style.display = inWork? 'none':'block';
+  if(!inWork) return;
+  el('collexBox').innerHTML =
+    `<div style="border:2px solid var(--gold); padding:14px; margin-bottom:8px">
+      <div class="blk" style="color:var(--gold); font-size:16px">👑 ${c.name} — WEEK ${c.weeks+1} OF 3</div>
+      <div style="font-size:12px; color:var(--dim); margin:6px 0 12px">The studio is locked in. No drops, hype bleeding, burn ticking. Quality read: <span style="color:var(--gold)">${stars(0.6 + c.quality*0.28)}</span></div>
+      <button class="actBtn" id="cwPush"><span><span class="an">KEEP WORKING</span><br><span class="ad">Steady progress. Designer skill matters here.</span></span><span class="ac">FREE</span></button>
+      <button class="actBtn" id="cwInvest"><span><span class="an">THROW MONEY AT IT</span><br><span class="ad">Premium fabric, guest artists. Big quality bump.</span></span><span class="ac">$1,500</span></button>
+      <button class="actBtn" id="cwRush"><span><span class="an">RUSH IT OUT</span><br><span class="ad">Finish this week. Quality suffers. The scene can smell rushed work.</span></span><span class="ac">RISKY</span></button>
+    </div>`;
+  el('cwPush').onclick = ()=>collexWork('push');
+  el('cwInvest').onclick = ()=>collexWork('invest');
+  el('cwInvest').disabled = S.cash < 1500;
+  el('cwRush').onclick = ()=>collexWork('rush');
+}
+
+/* ================= CREW ================= */
+function renderCrew(){
+  el('crewList').innerHTML='';
+  CREW_ROLES.forEach(r=>{
+    const m = S.crew[r.id];
+    const b = document.createElement('button');
+    b.className='actBtn';
+    if(m){
+      b.innerHTML = `<span><span class="an">${r.emoji} ${m.name} — ${r.title} ${'★'.repeat(m.skill)}${'☆'.repeat(5-m.skill)}</span><br><span class="ad">${r.blurb}</span></span><span class="ac">${fmt$(m.wage)}/WK · FIRE</span>`;
+      b.onclick = ()=>showModal('FIRE '+m.name+'?', 'l', 'They pack the desk plants. The group chat goes quiet.', [
+        {label:'KEEP THEM', run:null},
+        {label:'FIRE', run:()=>{ S.crew[r.id]=null; toast(m.name+' LET GO'); save(); render(); }}]);
+    } else {
+      b.innerHTML = `<span><span class="an">${r.emoji} HIRE A ${r.title}</span><br><span class="ad">${r.blurb}</span></span><span class="ac">VIEW CANDIDATES</span>`;
+      b.onclick = ()=>hireModal(r);
+    }
+    el('crewList').appendChild(b);
+  });
+}
+function hireModal(r){
+  const cands = [0,1,2].map(()=>{
+    const skill = clamp(ri(1,2) + ri(0, Math.floor(S.hype/25)), 1, 5);
+    return {name:pick(CREW_NAMES), skill, wage:Math.round(r.wageBase*(0.6 + skill*0.45))};
+  });
+  showModal('CANDIDATES — '+r.title, 'e',
+    `Word is out that ${S.label} is hiring. Better talent shows up when you're hotter.`,
+    cands.map(c=>({label:`${c.name} ${'★'.repeat(c.skill)}${'☆'.repeat(5-c.skill)} — ${fmt$(c.wage)}/wk`, run:()=>{
+      S.crew[r.id] = c;
+      toast(c.name+' JOINED THE CREW');
+      sfx('cash');
+      save(); render();
+    }})).concat([{label:'NOBODY', run:null}]));
+}
+function pickCrewMember(){
+  const filled = CREW_ROLES.filter(r=>S.crew[r.id]);
+  if(!filled.length) return null;
+  const r = pick(filled);
+  return {id:r.id, title:r.title, m:S.crew[r.id]};
+}
+
+/* ================= WEEK CYCLE ================= */
+function endWeek(){
+  S.prevHype = S.hype;
+  S.week++;
+  // hype decay — fame is a leaky bucket
+  S.hype = clamp(S.hype - (1 + S.hype*0.045)*(S.upgrades.vault?0.7:1), 0, 100);
+  // flagship store moves product every week
+  if(S.upgrades.flagship){
+    const inc = Math.round(S.hype*60);
+    if(inc>0){ S.cash += inc; S.stats.revenue += inc; toast('FLAGSHIP SALES +'+fmt$(inc)); }
+  }
+  // overheads — rent, samples, the cost of being seen
+  S.cash -= weeklyBurn();
+  if(S.cash < 0){
+    S.debtWeeks = (S.debtWeeks||0) + 1;
+    sfx('brick');
+    if(S.debtWeeks < 3){
+      toast(`IN THE RED — WEEK ${S.debtWeeks} OF 3 BEFORE REPOSSESSION`);
+      addPost('sys', null, `${S.label} is ${fmt$(-S.cash)} in debt. Dump stock, flip the vault, hustle — fast.`);
+    }
+  } else {
+    S.debtWeeks = 0;
+  }
+  // the resale market lives and breathes
+  S.drops.forEach(d=>{
+    if(d.resaleNow===undefined){ d.resaleNow=d.resale; d.retail=d.retail||0; d.stash=d.stash||0; }
+    d.prevResale = d.resaleNow;
+    d.resaleNow = clamp(d.resaleNow + (S.hype-50)*0.004 + rand(-0.12,0.12), 0.3, 12);
+    S.stats.bestResale = Math.max(S.stats.bestResale, d.resaleNow);
+  });
+  if(S.drops.length && Math.random()<0.05){
+    const d = pick(S.drops);
+    d.resaleNow = clamp(d.resaleNow + rand(0.6,2.2), 0.3, 12);
+    addPost('hot', pick(HANDLES), `vintage ${d.name} just went for ${fmt$((d.retail||50)*d.resaleNow)} on the aftermarket 📈`);
+    addTicker(`${d.name} HITS ${d.resaleNow.toFixed(1)}X RESALE`);
+  }
+  // pending bot scandal
+  if(S.flags.botRisk){
+    S.flags.botRisk = false;
+    if(Math.random()<0.5){
+      S.hype = clamp(S.hype-8,0,100);
+      addPost('hot', '@sellout.exe', quote('LEAK: {L} sold early access to a bot farm. down horrendous', ''));
+      addTicker(`${S.label} BOT SCANDAL EXPOSED`);
+      toast('BOT SCANDAL LEAKED — −8 HYPE');
+    }
+  }
+  // rivals drift — and hunt the throne when you hold it
+  const onTop = myRank()===1;
+  const chasers = onTop ? [...S.rivals].sort((a,b)=>b.hype-a.hype).slice(0,3) : [];
+  S.rivals.forEach(r=>{
+    r.prev = r.hype;
+    // symmetric drift + mean reversion — even hot brands cool off
+    r.hype = clamp(r.hype + rand(-3,3) + (50 - r.hype)*0.04 + (chasers.includes(r)? rand(0.5,2.2):0), 1, 99);
+    if(Math.random()<0.08){
+      r.hype = clamp(r.hype+ri(5,14),1,99);
+      addTicker(`${r.name} DROP SOLD OUT IN SECONDS`);
+    }
+  });
+  // trends shift often — chase them or set them
+  if(Math.random()<0.5) rerollTrends();
+  S.stats.peakHype = Math.max(S.stats.peakHype, S.hype);
+  S.stats.bestRank = Math.min(S.stats.bestRank, myRank());
+  save();
+  render();
+  // endings
+  if(checkEndings()) return;
+  // fashion week every 12 weeks, otherwise maybe a random event
+  if(S.week % 12 === 0){ fashionWeek(); return; }
+  if(Math.random()<0.45) fireEvent();
+}
+
+function checkEndings(){
+  const stockUnits = S.stock? S.stock.units:0;
+  if(S.debtWeeks >= 3){
+    sfx('brick');
+    showModal('REPOSSESSED 📉', 'l',
+      `Three weeks in the red. The landlord changes the locks, the factory seizes the samples, and someone is already selling the office chairs. ${S.label} is over.<br><br>`+runStats(),
+      [{label:'START A NEW LABEL', run:resetGame},
+       {label:'SHARE RUN CARD', run:()=>showCardModal(runCardData('REPOSSESSED 📉', false))}]);
+    localStorage.removeItem(SAVE_KEY);
+    return true;
+  }
+  if(S.cash < 150 && stockUnits===0 && vaultValue()<50 && S.hype < 3){
+    sfx('brick');
+    showModal('THE LABEL IS DEAD', 'l',
+      `No cash, no stock, no heat. ${S.label} quietly deletes its account.<br><br>`+runStats(),
+      [{label:'START A NEW LABEL', run:resetGame},
+       {label:'SHARE RUN CARD', run:()=>showCardModal(runCardData('WENT UNDER 💀', false))}]);
+    localStorage.removeItem(SAVE_KEY);
+    return true;
+  }
+  if(!S.flags.grail && myRank()===1 && S.hype>=85){
+    S.flags.grail = true;
+    sfx('grail');
+    addTicker(`${S.label} IS OFFICIALLY THE HOTTEST LABEL ALIVE`);
+    showModal('GRAIL STATUS 👑', 'w',
+      `${S.label} is #1 on the Heat 100 with ${Math.round(S.hype)}° heat. Museums are calling. Resellers weep with joy.<br><br>`+runStats()+
+      `<br>You've won. Keep running it — or retire at the peak for a permanent crown and start the next legend stronger.`,
+      [{label:'KEEP RUNNING THE LABEL', run:null},
+       {label:'RETIRE INTO LEGEND (+1 👑)', run:retireLabel}]);
+    save();
+    return true;
+  }
+  return false;
+}
+function runStats(){
+  return `<span class="num">WEEKS:</span> ${S.week} · <span class="num">DROPS:</span> ${S.stats.dropsCount} · <span class="num">PEAK HYPE:</span> ${Math.round(S.stats.peakHype)}°<br>`+
+         `<span class="num">BEST RANK:</span> #${S.stats.bestRank} · <span class="num">TOTAL REVENUE:</span> ${fmt$(S.stats.revenue)} · <span class="num">BEST RESALE:</span> ${S.stats.bestResale.toFixed(1)}x`;
+}
+
+/* ================= RUN CARD & LEGACY ================= */
+function runCardData(ending, grail){
+  const best = S.drops.reduce((a,b)=>(!a || b.resale>a.resale)? b:a, null);
+  return {
+    label:S.label, ending, grail, weeks:S.week, drops:S.stats.dropsCount,
+    revenue:S.stats.revenue, peakHype:Math.round(S.stats.peakHype),
+    bestRank:S.stats.bestRank, bestResale:S.stats.bestResale,
+    bestDrop:(best && best.resale>1)? best.name:null, crowns:loadLegacy().crowns,
+  };
+}
+function drawCard(d){
+  const c = document.createElement('canvas'); c.width=700; c.height=400;
+  const x = c.getContext('2d');
+  x.fillStyle='#0b0b0b'; x.fillRect(0,0,700,400);
+  x.strokeStyle='#2a2a2a'; x.lineWidth=2; x.strokeRect(1,1,698,398);
+  x.fillStyle='#ff2b2b'; x.fillRect(0,0,700,54);
+  x.fillStyle='#fff'; x.font='26px "Archivo Black", Impact, sans-serif';
+  x.fillText('SELLOUT — RUN CARD', 24, 38);
+  x.font='42px "Archivo Black", Impact, sans-serif';
+  x.fillText(d.label, 24, 122);
+  x.fillStyle = d.grail? '#ffd24a':'#ff2b2b';
+  x.font='20px "Archivo Black", Impact, sans-serif';
+  x.fillText(d.ending, 24, 158);
+  x.fillStyle='#f2f2f2'; x.font='19px "Space Grotesk", Arial, sans-serif';
+  const lines = [
+    `${d.weeks} weeks · ${d.drops} drops · ${fmt$(d.revenue)} total revenue`,
+    `Peak hype ${d.peakHype}° · best rank #${d.bestRank} · best resale ${d.bestResale.toFixed(1)}x`,
+    d.bestDrop? `Grail piece: ${d.bestDrop}`:'',
+  ];
+  lines.forEach((l,i)=>{ if(l) x.fillText(l, 24, 205+i*33); });
+  if(d.crowns>0){ x.font='24px serif'; x.fillText('👑'.repeat(Math.min(d.crowns,12)), 24, 330); }
+  x.fillStyle='#9a9a9a'; x.font='14px "Space Grotesk", Arial, sans-serif';
+  x.fillText('the merch drop simulator — don’t brick', 24, 374);
+  return c;
+}
+function downloadCanvas(c, name){
+  const a = document.createElement('a');
+  a.download = 'sellout_'+name.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'.png';
+  a.href = c.toDataURL('image/png');
+  a.click();
+}
+function copyRunText(d){
+  const t = `SELLOUT — ${d.label}\n${d.ending}\n${d.weeks} weeks · ${d.drops} drops · ${fmt$(d.revenue)} revenue\nPeak hype ${d.peakHype}° · best rank #${d.bestRank} · best resale ${d.bestResale.toFixed(1)}x` + (d.bestDrop? `\nGrail piece: ${d.bestDrop}`:'');
+  try{ navigator.clipboard.writeText(t).then(()=>toast('COPIED TO CLIPBOARD'), ()=>toast('COPY BLOCKED — DOWNLOAD THE PNG')); }
+  catch(e){ toast('COPY BLOCKED — DOWNLOAD THE PNG'); }
+}
+function showCardModal(d){
+  const c = drawCard(d);
+  showModal('RUN CARD', d.grail?'w':'l',
+    `<img src="${c.toDataURL('image/png')}" style="width:100%;border:1px solid var(--line)" alt="run card">`,
+    [
+      {label:'DOWNLOAD PNG', run:()=>{ downloadCanvas(c, d.label); showCardModal(d); }},
+      {label:'COPY AS TEXT', run:()=>{ copyRunText(d); showCardModal(d); }},
+      {label:'START A NEW LABEL', run:resetGame},
+    ]);
+}
+function retireLabel(){
+  const L = loadLegacy();
+  L.crowns++;
+  L.labels.push({name:S.label, weeks:S.week, revenue:S.stats.revenue});
+  saveLegacy(L);
+  localStorage.removeItem(SAVE_KEY);
+  sfx('grail');
+  showCardModal(runCardData('GRAIL LEGEND — RETIRED AT THE TOP 👑', true));
+}
+
+/* ================= FASHION WEEK ================= */
+function fashionWeek(){
+  const cost = Math.round(8000 + S.hype*300);
+  const recent = S.drops.slice(-4);
+  const variety = new Set(recent.map(d=>d.name.split(' ').pop())).size;
+  sfx('event');
+  const choices = [];
+  if(S.cash >= cost) choices.push({label:`SHOW A COLLECTION (−${fmt$(cost)})`, run:()=>{
+    S.cash -= cost;
+    const p = 0.35 + S.rep*0.03 + variety*0.07;
+    const roll = Math.random();
+    let html='', cls='e';
+    if(roll < p){
+      const g = ri(12,20); S.hype = clamp(S.hype+g,0,100); S.rep = clamp(S.rep+1,0,10);
+      cls='w'; sfx('grail');
+      html = `Standing ovation. Front row full of celebrities, every blog running your looks.<br><br><span class="num g">+${g} hype</span> · <span class="num y">+1 rep</span>`;
+      addTicker(`${S.label} COLLECTION CLOSES FASHION WEEK`);
+      addPost('hot', pick(HANDLES), quote('the {L} runway show ENDED the season. nothing else mattered',''));
+    } else if(roll < p+0.35){
+      const g = ri(2,6); S.hype = clamp(S.hype+g,0,100);
+      html = `Polite applause. A few good reviews, a few shrugs.<br><br><span class="num g">+${g} hype</span>`;
+      addPost('', pick(HANDLES), quote('the {L} show was… fine? mid maybe',''));
+    } else {
+      const l = ri(5,10); S.hype = clamp(S.hype-l,0,100);
+      cls='l'; sfx('brick');
+      html = `The critics were merciless. One review just said "why?".<br><br><span class="num r">−${l} hype</span>`;
+      addPost('', pick(HANDLES), quote('{L} got cooked at fashion week and honestly? deserved',''));
+    }
+    save(); render();
+    showModal('THE REVIEWS ARE IN', cls, html, [{label:'OK', run:null}]);
+  }});
+  choices.push({label:'SKIP THE SEASON', run:()=>{
+    S.hype = clamp(S.hype-3,0,100);
+    addTicker(`${S.label} SITS OUT FASHION WEEK — RIVALS SHINE`);
+    save(); render();
+  }});
+  showModal('FASHION WEEK 🏆', 'e',
+    `The season's biggest stage. Every rival is showing. Critics, cameras, buyers — all watching.` +
+    (variety>=3 ? '<br><br><span class="g">Your recent drops show real range — critics reward variety.</span>'
+                : '<br><br><span class="y">Critics reward variety, and your recent drops have been samey.</span>') +
+    (S.cash < cost ? `<br><span class="r">A collection costs ${fmt$(cost)} — you can't afford to show this season.</span>`:''),
+    choices);
+}
+
+/* ================= EVENTS ================= */
+function fireEvent(){
+  const pool = EVENTS.filter(e=>!e.cond || e.cond());
+  const ev = pick(pool);
+  const desc = ev.desc();
+  sfx('event');
+  const choices = ev.choices.filter(c=>!c.cond || c.cond());
+  showModal(ev.title, 'e', desc, choices.map(c=>({
+    label: c.label,
+    run: ()=>{ const out = c.run(); save(); render();
+      if(out) showModal(ev.title, out.cls||'e', out.html, [{label:'OK', run:null}]); }
+  })));
+}
+const EVENTS = [
+  { title:'CELEB SPOTTED', desc:()=>`A chart-topping rapper got papped in a ${S.label} piece. The photo is everywhere.`,
+    choices:[{label:'LET IT COOK', run:()=>{ const g=ri(8,14); S.hype=clamp(S.hype+g,0,100);
+      addTicker(`RAP STAR SPOTTED IN ${S.label}`);
+      return {cls:'w', html:`<span class="num g">+${g} hype</span>. You didn't even pay for it.`}; }}]},
+  { title:'BOT FARM DM', desc:()=>`A reseller bot operation offers ${fmt$(2500)} for early access links to your next drop. Nobody would know. Probably.`,
+    choices:[
+      {label:'TAKE THE BAG (+$2,500, risky)', run:()=>{ S.cash+=2500; S.flags.botRisk=true;
+        return {html:`<span class="num g">+${fmt$(2500)}</span>. You feel nothing. Yet.`}; }},
+      {label:'DECLINE (+1 rep)', run:()=>{ S.rep=clamp(S.rep+1,0,10);
+        return {cls:'w', html:'You post the DM screenshot. The community respects it. <span class="num y">+1 rep</span>'}; }}]},
+  { title:'FAKES FLOOD THE MARKET', desc:()=>`Counterfeit ${S.label} pieces are all over the resale apps. Stitching is terrible. People are getting scammed.`,
+    choices:[
+      {label:'LAWYER UP (−$1,500)', cond:()=>S.cash>=1500, run:()=>{ S.cash-=1500; S.rep=clamp(S.rep+2,0,10); const g=ri(1,4); S.hype=clamp(S.hype+g,0,100);
+        return {cls:'w', html:`Takedowns issued. Fans post the cease-and-desist like a trophy. <span class="num y">+2 rep</span> · <span class="num g">+${g} hype</span>`}; }},
+      {label:'IGNORE IT', run:()=>{ S.hype=clamp(S.hype-5,0,100);
+        return {cls:'l', html:'Fakes everywhere dilute the brand. <span class="num r">−5 hype</span>'}; }}]},
+  { title:'FABRIC PRICES SPIKE', desc:()=>'Global supply chain chaos. Your factory calls: next production run costs +35%.',
+    choices:[{label:'GREAT.', run:()=>{ S.flags.costSpike=true; return null; }}]},
+  { title:'DESIGN LEAKED', desc:()=>'Someone at the factory leaked your next design. Half the mystery is gone.',
+    choices:[{label:'DAMAGE DONE', run:()=>{ S.flags.leaked=true; return null; }}]},
+  { title:'MAGAZINE FEATURE', desc:()=>`A big culture magazine offers a feature spread on ${S.label} — for ${fmt$(1200)} in "production costs".`,
+    choices:[
+      {label:'PAY FOR IT (−$1,200)', cond:()=>S.cash>=1200, run:()=>{ S.cash-=1200; const g=ri(4,10); S.hype=clamp(S.hype+g,0,100);
+        addTicker(`${S.label} GETS THE COVER TREATMENT`);
+        return {cls:'w', html:`The spread looks incredible. <span class="num g">+${g} hype</span>`}; }},
+      {label:'REAL ONES DON’T PAY FOR PRESS', run:()=>null}]},
+  { title:'RIVAL SHADE', desc:()=>{ const r=pick(S.rivals); S._shadeRival=r.name;
+      return `${r.name} posted a story mocking your last drop. The comments are a warzone.`; },
+    choices:[
+      {label:'CLAP BACK', run:()=>{ if(Math.random()<0.5){ const g=ri(4,8); S.hype=clamp(S.hype+g,0,100);
+          addTicker(`${S.label} ENDS ${S._shadeRival} IN ONE POST`);
+          return {cls:'w', html:`Your reply goes viral. <span class="num g">+${g} hype</span>`}; }
+        const l=ri(4,8); S.hype=clamp(S.hype-l,0,100);
+        return {cls:'l', html:`You fumbled the reply. Screenshots forever. <span class="num r">−${l} hype</span>`}; }},
+      {label:'STAY QUIET', run:()=>({html:'Silence. Mysterious. The beef dies.'})}]},
+  { title:'OLD POSTS RESURFACE', desc:()=>'Someone dug up embarrassing posts from before the label. It’s trending, and not in a good way.',
+    choices:[
+      {label:'APOLOGY VIDEO', run:()=>{ S.hype=clamp(S.hype-6,0,100);
+        if(Math.random()<0.6){ S.hype=clamp(S.hype+4,0,100); return {html:'<span class="num r">−6 hype</span>, but the apology mostly landed. <span class="num g">+4 back</span>'}; }
+        S.hype=clamp(S.hype-3,0,100);
+        return {cls:'l', html:'<span class="num r">−6 hype</span>, and the apology made it worse. <span class="num r">−3 more</span>'}; }},
+      {label:'SAY NOTHING', run:()=>{ S.hype=clamp(S.hype-6,0,100);
+        return {cls:'l', html:'The cycle moves on in a week. <span class="num r">−6 hype</span>'}; }}]},
+  { title:'COLLAB OFFER', cond:()=>S.rivals.some(r=>r.hype>S.hype+10),
+    desc:()=>{ const r=pick(S.rivals.filter(x=>x.hype>S.hype+10)); S._collabRival=r;
+      return `${r.name} (${Math.round(r.hype)}° heat) wants a collab capsule. Buy-in: ${fmt$(2500)}.`; },
+    choices:[
+      {label:'SIGN THE DEAL (−$2,500)', cond:()=>S.cash>=2500, run:()=>{ S.cash-=2500;
+        const g = Math.round((S._collabRival.hype - S.hype)*0.25 + 5); S.hype=clamp(S.hype+g,0,100);
+        addTicker(`${S.label} × ${S._collabRival.name} COLLAB CONFIRMED`);
+        return {cls:'w', html:`The collab capsule sells out instantly. <span class="num g">+${g} hype</span>`}; }},
+      {label:'STAY INDEPENDENT', run:()=>({html:'You pass. Purists nod approvingly.'})}]},
+  { title:'STOLEN DESIGN CLAIM', desc:()=>'An indie artist claims your last graphic rips off their work. The side-by-side is… not great for you.',
+    choices:[
+      {label:'SETTLE QUIETLY (−$800)', cond:()=>S.cash>=800, run:()=>{ S.cash-=800; S.rep=clamp(S.rep+1,0,10);
+        return {html:'Handled. They post "resolved 🤝". <span class="num y">+1 rep</span>'}; }},
+      {label:'FIGHT IT', run:()=>{ if(Math.random()<0.5){ const g=ri(1,3); S.hype=clamp(S.hype+g,0,100);
+          return {cls:'w', html:`Your receipts were better. <span class="num g">+${g} hype</span>`}; }
+        S.cash=Math.max(0,S.cash-2000); S.hype=clamp(S.hype-7,0,100);
+        return {cls:'l', html:'You lost, loudly. <span class="num r">−$2,000 · −7 hype</span>'}; }}]},
+  { title:'WAREHOUSE POP-UP OFFER', cond:()=>S.stock!==null,
+    desc:()=>`A promoter offers to move your ${S.stock.units} pcs of dead stock at a hyped warehouse party — 35% of market value, and it looks like an event, not a dump.`,
+    choices:[
+      {label:'RUN IT', run:()=>{ const v=stockValue(0.35); S.cash+=v; S.stock=null;
+        const g=ri(2,5); S.hype=clamp(S.hype+g,0,100);
+        return {cls:'w', html:`Stock gone, and it looked intentional. <span class="num g">+${fmt$(v)} · +${g} hype</span>`}; }},
+      {label:'PASS', run:()=>null}]},
+  { title:'WAGE DEMAND', cond:()=>CREW_ROLES.some(r=>S.crew[r.id]),
+    desc:()=>{ const e=pickCrewMember(); S._ev=e; return `${e.m.name}, your ${e.title.toLowerCase()}, wants a 40% raise. "Rivals keep sliding into my DMs."`; },
+    choices:[
+      {label:'PAY UP', run:()=>{ S._ev.m.wage=Math.round(S._ev.m.wage*1.4);
+        return {html:`Wage bumped to ${fmt$(S._ev.m.wage)}/wk. Loyalty secured. For now.`}; }},
+      {label:'REFUSE', run:()=>{ if(Math.random()<0.5){ S.crew[S._ev.id]=null;
+          return {cls:'l', html:S._ev.m.name+' walked the same day. The desk is already empty.'}; }
+        return {html:'They grumble but stay. The group chat is tense.'}; }}]},
+  { title:'POACHING ATTEMPT', cond:()=>!!S.crew.designer,
+    desc:()=>{ const rv=pick(S.rivals); S._rv=rv.name; return `${rv.name} just offered ${S.crew.designer.name} double to jump ship.`; },
+    choices:[
+      {label:'MATCH THE OFFER (wage ×2)', run:()=>{ S.crew.designer.wage*=2;
+        return {html:`Matched. ${S.crew.designer.name} stays — at ${fmt$(S.crew.designer.wage)}/wk.`}; }},
+      {label:'LET THEM GO', run:()=>{ const n=S.crew.designer.name; S.crew.designer=null; S.hype=clamp(S.hype-3,0,100);
+        return {cls:'l', html:`${n} left for ${S._rv}. The scene noticed. <span class="num r">−3 hype</span>`}; }}]},
+  { title:'CREW BURNOUT', cond:()=>CREW_ROLES.some(r=>S.crew[r.id]),
+    desc:()=>{ const e=pickCrewMember(); S._ev=e; return `${e.m.name} is running on fumes — missed deadlines, 4am voice memos, crying at the fabric store.`; },
+    choices:[
+      {label:'PAID LEAVE (−$800)', cond:()=>S.cash>=800, run:()=>{ S.cash-=800;
+        return {cls:'w', html:'A week off, expenses covered. They come back sharper.'}; }},
+      {label:'PUSH THROUGH', run:()=>{ if(Math.random()<0.5){ S.crew[S._ev.id]=null;
+          return {cls:'l', html:S._ev.m.name+' quit via text at 3am. No notice.'}; }
+        return {html:'They grind through it. This time.'}; }}]},
+];
+
+/* ================= NAMES ================= */
+function randDropName(){ return pick(ADJ)+' '+pick(NOUN); }
+function randLabelName(){ return pick(LABEL_A)+' '+pick(LABEL_B); }
+
+/* ================= SAVE ================= */
+function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
+function load(){
+  try{
+    const j = localStorage.getItem(SAVE_KEY);
+    if(!j) return null;
+    const s = JSON.parse(j);
+    s.upgrades = s.upgrades || {};
+    s.typeStreak = s.typeStreak || 0;
+    s.lastTypeId = s.lastTypeId || null;
+    s.debtWeeks = s.debtWeeks || 0;
+    s.crew = s.crew || {designer:null, plug:null, production:null};
+    s.collection = s.collection || null;
+    s.pendingConcept = s.pendingConcept || null;
+    if(!s.trendHot){
+      s.trendHot = TYPES[1].id;
+      s.trendCold = TYPES[3].id;
+    }
+    (s.drops||[]).forEach(d=>{
+      if(d.resaleNow===undefined) d.resaleNow = d.resale;
+      d.retail = d.retail||0;
+      d.stash = d.stash||0;
+    });
+    return s;
+  }catch(e){ return null; }
+}
+function resetGame(){ localStorage.removeItem(SAVE_KEY); location.reload(); }
+
+/* ================= BOOT ================= */
+function startUI(){
+  el('start').style.display='none';
+  el('hdr').style.display='flex';
+  el('wrap').style.display='grid';
+  selType = TYPES[1];
+  syncSliderBounds();
+  el('priceSlider').value = selType.base;
+  render();
+}
+el('randLabel').onclick = ()=>{ el('labelInput').value = randLabelName(); };
+el('startBtn').onclick = ()=>{
+  const name = el('labelInput').value.trim().toUpperCase() || randLabelName();
+  newGame(name); save(); startUI();
+};
+el('contBtn').onclick = ()=>{ S = load(); if(S) startUI(); };
+el('resetBtn').onclick = ()=>{
+  showModal('RESET SAVE?', 'l', 'This deletes the label forever. The archive dies with it.', [
+    {label:'KEEP PLAYING', run:null},
+    {label:'DELETE EVERYTHING', run:resetGame},
+  ]);
+};
+el('muteBtn').textContent = muted ? '🔇' : '🔊';
+el('muteBtn').onclick = ()=>{
+  muted = !muted;
+  try{ localStorage.setItem('sellout_mute', muted?'1':'0'); }catch(e){}
+  el('muteBtn').textContent = muted ? '🔇' : '🔊';
+  if(!muted) sfx('cash');
+};
+el('diceBtn').onclick = ()=>{ el('dropName').value = randDropName(); S.pendingConcept = null; renderSliders(); };
+el('sketchBtn').onclick = sketchConcepts;
+el('collexBtn').onclick = startCollection;
+el('dropBtn').onclick = doDrop;
+el('qtySlider').oninput = renderSliders;
+el('priceSlider').oninput = renderSliders;
+el('stashSlider').oninput = renderSliders;
+document.querySelectorAll('#tabs button').forEach(b=>{
+  b.onclick = ()=>{
+    document.querySelectorAll('#tabs button').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.tabPane').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    el('tab-'+b.dataset.tab).classList.add('on');
+  };
+});
+el('labelInput').addEventListener('keydown', e=>{ if(e.key==='Enter') el('startBtn').click(); });
+
+if(load()) el('contBtn').style.display='inline-block';
+(function(){
+  const L = loadLegacy();
+  if(L.crowns>0){
+    const last = L.labels.slice(-3).map(l=>l.name).join(', ');
+    el('legacyLine').innerHTML =
+      `${'👑'.repeat(Math.min(L.crowns,10))} LEGACY: ${L.crowns} crown${L.crowns>1?'s':''} — next label starts with +${fmt$(L.crowns*2000)} cash & +${Math.min(L.crowns*3,17)} hype`+
+      (last? `<br><span style="color:var(--dim);font-weight:400">retired legends: ${last}</span>`:'');
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# build/upload artifacts
+sellout.zip
+
+# local tool config
+.claude/settings.local.json
