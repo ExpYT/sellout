@@ -107,14 +107,56 @@ function renderDashboard(){
     </div>`).join('');
   $id('diffLabel').textContent = diff().name;
 
-  // competitor leaderboard (you included)
-  const all = [...G.competitors.map(c=>({name:c.name, f:c.followers, me:false})), {name:G.brand, f:G.followers, me:true}]
+  // brand identity: DNA roots + traits earned through behaviour
+  const traits = brandPersonality();
+  $id('identityBox').innerHTML = `
+    <div class="sub-stat">Founded as a <b style="color:var(--txt)">${dna().name}</b> brand</div>
+    <div style="margin:10px 0 6px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">The scene knows you as</div>
+    <div class="big-stat" style="font-size:19px;color:var(--accent)">${traits.join(' · ')}</div>
+    <div class="sub-stat" style="margin-top:8px">Computed from your last 6 drops — identity follows behaviour, not intentions.</div>`;
+
+  // lifetime records
+  const D = G.drops;
+  const by = f => D.length? D.reduce((a,b)=>f(b)>f(a)?b:a) : null;
+  const mostProfit = by(d=>d.profit);
+  const worst      = D.length? D.reduce((a,b)=>b.profit<a.profit?b:a) : null;
+  const fastest    = D.filter(d=>d.soldOut&&d.selloutMin!=null).sort((a,b)=>a.selloutMin-b.selloutMin)[0];
+  const topRated   = D.filter(d=>d.review).sort((a,b)=>b.review.overall-a.review.overall)[0];
+  const topResale  = by(d=>d.resaleNow||d.resale);
+  const avgRating  = D.filter(d=>d.review).length? Math.round(D.filter(d=>d.review).reduce((a,d)=>a+d.review.overall,0)/D.filter(d=>d.review).length) : null;
+  const recRow = (l,v)=> v? `<div class="row-item" style="padding:8px 12px"><div class="ri-main"><div class="ri-sub">${l}</div><div class="ri-title" style="font-size:12.5px">${v}</div></div></div>` : '';
+  $id('recordsBox').innerHTML =
+    recRow('Lifetime revenue / profit', `${fmt$(G.stats.lifetimeRevenue)} / <span style="color:${(G.stats.lifetimeProfit||0)>=0?'var(--green)':'var(--red)'}">${fmt$(G.stats.lifetimeProfit||0)}</span> · ${fmtN(G.stats.lifetimeSales)} units`) +
+    recRow('Most profitable collection', mostProfit && `${mostProfit.name} — ${fmt$(mostProfit.profit)}`) +
+    recRow('Fastest sellout', fastest && `${fastest.name} — ${fastest.selloutMin<1? Math.round(fastest.selloutMin*60)+'s' : fastest.selloutMin+' min'}`) +
+    recRow('Highest rated', topRated && `${topRated.name} — ${topRated.review.overall}/100`) +
+    recRow('Average critic rating', avgRating && avgRating+'/100') +
+    recRow('Highest resale', topResale && (topResale.resaleNow||topResale.resale)>topResale.price? `${topResale.name} — ${fmt$(topResale.resaleNow||topResale.resale)}` : null) +
+    recRow('Best marketing campaign', G.stats.bestCampaign && `${G.stats.bestCampaign.name} — +${G.stats.bestCampaign.gain} hype (wk ${G.stats.bestCampaign.week})`) +
+    recRow('Largest loss', worst && worst.profit<0? `${worst.name} — ${fmt$(worst.profit)}` : null) ||
+    '<div class="sub-stat">Records are written by drops. Go make some.</div>';
+
+  // milestones
+  const earned = MILESTONES.filter(m=>G.milestones[m.id]);
+  const upcoming = MILESTONES.filter(m=>!G.milestones[m.id]).slice(0,3);
+  $id('milestonesBox').innerHTML =
+    (earned.map(m=>`<div class="row-item" style="padding:8px 12px;border-color:rgba(251,191,36,.35)"><div class="ri-main"><div class="ri-title" style="font-size:12.5px;color:var(--gold)">🏆 ${m.name}</div></div><div class="ri-side" style="color:var(--dim);font-weight:400">wk ${G.milestones[m.id]}</div></div>`).join('')) +
+    (upcoming.map(m=>`<div class="row-item" style="padding:8px 12px;opacity:.45"><div class="ri-main"><div class="ri-title" style="font-size:12.5px">🔒 ${m.name}</div></div></div>`).join('')) ||
+    '<div class="sub-stat">Everything is still ahead of you.</div>';
+
+  // competitor leaderboard — every rival has a recognisable identity
+  const all = [...G.competitors.map(c=>({name:c.name, f:c.followers, prev:c.prevFollowers||c.followers, style:c.style||'', me:false})),
+               {name:G.brand, f:G.followers, prev:G.history.followers[G.history.followers.length-2]||G.followers, style:brandPersonality().join(' · ').toLowerCase(), me:true}]
     .sort((a,b)=>b.f-a.f);
-  $id('competitorList').innerHTML = all.map((c,i)=>`
-    <div class="row-item" style="${c.me?'border-color:var(--accent)':''}">
-      <div class="ri-main"><div class="ri-title" style="${c.me?'color:var(--accent)':''}">${i+1}. ${c.name}</div></div>
-      <div class="ri-side">${fmtN(c.f)} followers</div>
-    </div>`).join('');
+  $id('competitorList').innerHTML = all.map((c,i)=>{
+    const mv = c.f-c.prev;
+    const arrow = mv>50? '<span style="color:var(--green)">▲</span>' : mv<-50? '<span style="color:var(--red)">▼</span>' : '<span style="color:var(--dim)">·</span>';
+    return `<div class="row-item" style="${c.me?'border-color:var(--accent)':''}">
+      <div class="ri-main"><div class="ri-title" style="${c.me?'color:var(--accent)':''}">${i+1}. ${c.name}</div>
+        <div class="ri-sub">${c.style}</div></div>
+      <div class="ri-side">${arrow} ${fmtN(c.f)}</div>
+    </div>`;
+  }).join('');
 
   // location / HQ upgrade
   const loc = currentLocation();
@@ -134,14 +176,16 @@ function renderDashboard(){
     saveGame(); renderAll();
   };
 
-  // feed
+  // feed — customers, press outlets, and system notes each read differently
   $id('feedList').innerHTML = G.feed.map(p=>
     p.cls==='sys'? `<div class="post sys">${p.text}</div>`
+    : p.cls==='press'? `<div class="post press"><span class="handle" style="color:var(--gold)">${p.handle}</span> <span style="font-style:italic">${p.text}</span></div>`
     : `<div class="post ${p.cls}"><span class="handle">${p.handle}</span> ${p.text}</div>`
   ).join('') || '<div class="post sys">Quiet for now. Drop something.</div>';
 
   drawLineChart('chartFollowers', G.history.followers);
   drawBarChart('chartRevenue', G.history.revenue);
+  drawLineChart('chartProfit', G.history.weekly && G.history.weekly.length>1? G.history.weekly : null);
 }
 
 /* ---------------- design studio ---------------- */
@@ -360,20 +404,53 @@ function renderHistory(){
   });
   if(!G.drops.length){ box.innerHTML = '<div class="sub-stat">No drops yet. History is written one release at a time.</div>'; return; }
   let list = G.drops.slice().reverse();
-  if(histFilter==='soldout') list = list.filter(d=>d.soldOut);
+  if(histFilter==='oldest') list = G.drops.slice();
+  else if(histFilter==='soldout') list = list.filter(d=>d.soldOut);
   else if(histFilter==='flop') list = list.filter(d=>!d.soldOut);
   else if(histFilter==='profit') list = list.slice().sort((a,b)=>b.profit-a.profit);
+  else if(histFilter==='rating') list = list.filter(d=>d.review).sort((a,b)=>b.review.overall-a.review.overall);
   else if(histFilter==='resale') list = list.slice().sort((a,b)=>(b.resaleNow||b.resale)-(a.resaleNow||a.resale));
+  else if(histFilter==='fastest') list = list.filter(d=>d.soldOut&&d.selloutMin!=null).sort((a,b)=>a.selloutMin-b.selloutMin);
   if(!list.length){ box.innerHTML = '<div class="sub-stat">Nothing matches this filter yet.</div>'; return; }
   box.innerHTML = list.map(d=>{
     const rn = d.resaleNow||d.resale;
     const mv = d.resalePrev!==undefined? rn-d.resalePrev : 0;
     const arrow = mv>0? '<span style="color:var(--green)">▲</span>' : mv<0? '<span style="color:var(--red)">▼</span>' : '·';
-    return `<div class="row-item"><div class="ri-main">
+    const stars = d.review? `<span style="color:var(--gold)">${'★'.repeat(d.review.stars)}</span> ${d.review.overall}/100 · ` : '';
+    return `<div class="row-item" data-arch="${G.drops.indexOf(d)}" style="cursor:pointer"><div class="ri-main">
       <div class="ri-title">${d.name} <span style="color:var(--dim);font-weight:400">wk${d.week} · ${d.product}</span></div>
-      <div class="ri-sub">${fmtN(d.sold)}/${fmtN(d.qty)} sold ${d.soldOut? `· sold out in ${d.selloutMin<1? Math.round(d.selloutMin*60)+'s':d.selloutMin+' min'}`:''} · quality ${d.quality}/10 · profit <span style="color:${d.profit>=0?'var(--green)':'var(--red)'}">${fmt$(d.profit)}</span></div></div>
+      <div class="ri-sub">${stars}${fmtN(d.sold)}/${fmtN(d.qty)} sold ${d.soldOut? `· sold out in ${d.selloutMin<1? Math.round(d.selloutMin*60)+'s':d.selloutMin+' min'}`:''} · profit <span style="color:${d.profit>=0?'var(--green)':'var(--red)'}">${fmt$(d.profit)}</span></div></div>
       <div class="ri-side">${arrow} resale ${fmt$(rn)}<br><span style="color:var(--dim);font-weight:400">retail was ${fmt$(d.price)}</span></div></div>`;
   }).join('');
+  box.querySelectorAll('[data-arch]').forEach(el=>{
+    el.onclick = ()=>showArchiveCard(G.drops[+el.dataset.arch]);
+  });
+}
+
+/* Full archive card for one collection — its permanent place in brand history. */
+function showArchiveCard(d){
+  const rv = d.review;
+  const line = (l,v)=> v!==undefined && v!==null? `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line)"><span style="color:var(--dim)">${l}</span><b>${v}</b></div>` : '';
+  showModal(d.name, 'info',
+    (rv? `<div style="background:var(--panel2);border-radius:8px;padding:12px 14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="color:var(--gold);font-size:16px;letter-spacing:2px">${'★'.repeat(rv.stars)}${'☆'.repeat(5-rv.stars)}</span>
+        <b style="font-size:18px">${rv.overall}/100</b></div>
+      <div style="font-size:12.5px;color:var(--dim);margin-top:6px;font-style:italic">“${rv.text}”</div>
+      <div style="font-size:11px;color:var(--dim);margin-top:8px">${Object.entries(rv.scores).map(([k,v])=>`${k} <b style="color:var(--txt)">${v}</b>`).join(' · ')}</div></div>` : '') +
+    line('Released', 'Week '+d.week) +
+    line('Product', d.product+' · '+d.theme) +
+    line('Produced / Sold', fmtN(d.qty)+' / '+fmtN(d.sold)) +
+    line('Sellout time', d.soldOut? (d.selloutMin<1? Math.round(d.selloutMin*60)+' seconds' : d.selloutMin+' minutes') : 'did not sell out') +
+    line('Revenue / Profit', fmt$(d.revenue)+' / '+fmt$(d.profit)) +
+    line('Retail / Resale now', fmt$(d.price)+' / '+fmt$(d.resaleNow||d.resale)) +
+    line('Quality', d.quality+'/10') +
+    line('Launch hype', d.hypeAt!==undefined? d.hypeAt+'/100' : null) +
+    line('Best crowd', d.bestSeg) +
+    line('Weakest crowd', d.worstSeg) +
+    line('Biggest success', d.topGood) +
+    line('Biggest weakness', d.topBad),
+    [{label:'CLOSE', cls:'primary', fn:null}]);
 }
 
 /* ---------------- charts (canvas, no libraries) ---------------- */
@@ -441,6 +518,25 @@ document.querySelectorAll('#nav button').forEach(b=>{
 $id('advanceBtn').onclick = ()=>advanceWeek();
 $id('skipBtn').onclick = ()=>skipWeeks(4);
 
+/* Brand DNA selection on the start screen */
+let chosenDna = 'vintage';
+(function(){
+  const row = $id('dnaRow');
+  DNAS.forEach(d=>{
+    const b = document.createElement('button');
+    b.className = 'opt'+(d.id===chosenDna?' sel':'');
+    b.textContent = d.name;
+    b.onclick = ()=>{
+      chosenDna = d.id;
+      row.querySelectorAll('.opt').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel');
+      $id('dnaBlurb').textContent = d.blurb;
+    };
+    row.appendChild(b);
+  });
+  $id('dnaBlurb').textContent = DNAS.find(d=>d.id===chosenDna).blurb;
+})();
+
 /* difficulty selection on the start screen */
 let chosenDiff = 'normal';
 (function(){
@@ -471,7 +567,7 @@ $id('importFile').onchange = e=>{ if(e.target.files[0]) importSave(e.target.file
 
 $id('startBtn').onclick = ()=>{
   const name = $id('startName').value.trim().toUpperCase() || 'NO LABEL';
-  newGame(name, chosenDiff);
+  newGame(name, chosenDiff, chosenDna);
   saveGame();
   startUI();
   showModal('WELCOME TO THE GAME', 'info',

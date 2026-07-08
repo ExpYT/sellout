@@ -52,6 +52,9 @@ function segmentInterest(seg, col, price){
   // Loyalty & reputation lift everything — a trusted brand converts better
   s += (G.loyalty-50)/150 + (G.reputation-50)/220;
 
+  // Brand DNA: the crowd you were built for finds you faster
+  s += (dna().seg[seg.id]||0);
+
   return clamp(s, 0.05, 1.7);
 }
 
@@ -144,16 +147,58 @@ function tickResaleMarket(){
   }
 }
 
-/* ---------------- AI competitors ---------------- */
+/* ---------------- AI competitors ----------------
+   Six fixed brands, each with a personality. Their weekly moves,
+   growth character and headlines all follow who they are.        */
+const PERSONAS = [
+  {name:'VOID',        style:'ultra-exclusive · tiny runs, huge resale', f:[900,2600],   p:[55,72],
+   moves:{drop:.55, viral:.1, collab:.05, flop:.1, scandal:.2},
+   lines:{drop:'VOID released 40 units at 3am with no announcement. Gone before sunrise. Resale is already 5x.',
+          viral:'A VOID piece surfaced in a paparazzi shot. Nobody can verify it. Resale doubled anyway.',
+          flop:'VOID delayed their drop indefinitely. The mystique only grows.',
+          scandal:'VOID accused of buying their own stock to inflate resale. They responded with silence.'}},
+  {name:'NOVA',        style:'affordable basics · mass production, big community', f:[14000,28000], p:[12,26],
+   moves:{drop:.4, viral:.15, collab:.15, flop:.2, scandal:.1},
+   lines:{drop:'NOVA restocked their core line. 10,000 units, still selling. The people\'s brand keeps eating.',
+          viral:'NOVA\'s "$30 hoodie vs $300 hoodie" video hit every feed this week.',
+          flop:'NOVA\'s premium experiment flopped hard. Their community wants basics, not aspirations.',
+          scandal:'NOVA called out for shrinking sizes. They issued refunds within hours — crisis handled.'}},
+  {name:'KITSUNE',     style:'minimal japanese-inspired · devoted following', f:[3500,8000], p:[45,62],
+   moves:{drop:.45, viral:.1, collab:.1, flop:.05, scandal:.05},
+   lines:{drop:'KITSUNE\'s seasonal release sold through quietly, as always. Their fans don\'t miss.',
+          viral:'A KITSUNE stitching detail went viral among quality obsessives. 400 slow-motion videos later…',
+          flop:'KITSUNE misfired with a graphic tee. Their purists politely pretended not to see it.',
+          scandal:'KITSUNE raised prices 20%. Their fans thanked them for the warning.'}},
+  {name:'OUTLAW',      style:'skate culture · youth-focused, loud', f:[5500,12000], p:[22,38],
+   moves:{drop:.35, viral:.25, collab:.15, flop:.15, scandal:.1},
+   lines:{drop:'OUTLAW dropped a deck-and-tee pack outside a skate contest. Chaos, in a good way.',
+          viral:'An OUTLAW clip of a kickflip in their new jacket is everywhere. Youth culture won this week.',
+          flop:'OUTLAW\'s formal line confused everyone. Skaters don\'t want blazers.',
+          scandal:'OUTLAW\'s founder beefed with a magazine editor in the comments. Sales went UP.'}},
+  {name:'OBSIDIAN',    style:'luxury streetwear · expensive, high prestige', f:[1800,5200], p:[58,78],
+   moves:{drop:.45, viral:.1, collab:.2, flop:.1, scandal:.15},
+   lines:{drop:'OBSIDIAN\'s $600 hoodie sold out to a client list nobody can get on.',
+          viral:'OBSIDIAN dressed the front row this week. The photos did the marketing.',
+          flop:'OBSIDIAN\'s diffusion line got called "expensive for no reason". They pretended not to hear.',
+          scandal:'OBSIDIAN caught producing in the same factory as fast fashion. Prestige takes a hit.'}},
+  {name:'PAPER CROWN', style:'trend-chasing hype machine · volatile', f:[7000,15000], p:[8,28],
+   moves:{drop:.3, viral:.25, collab:.1, flop:.25, scandal:.1},
+   lines:{drop:'PAPER CROWN dropped whatever\'s trending this week. It sold. It always sells. For now.',
+          viral:'PAPER CROWN\'s latest bandwagon jump actually hit. The algorithm loves them.',
+          flop:'PAPER CROWN missed the trend window by a week. Full racks, heavy markdowns.',
+          scandal:'Side-by-sides of PAPER CROWN\'s "original" designs are circulating again.'}},
+];
+
 function makeCompetitors(){
-  const names = ['NORTHLINE','VANTA WORKS','PAPER CROWN','GREYSCALE','HALFCUT','MONUMENT'];
-  return names.map((n,i)=>({
-    name:n,
-    followers: ri(400, 12000) * (i<2?3:1),
-    prestige:  ri(5, 55),
+  return PERSONAS.map(p=>({
+    name: p.name,
+    style: p.style,
+    followers: ri(p.f[0], p.f[1]),
+    prestige:  ri(p.p[0], p.p[1]),
     quality:   ri(4, 9),
   }));
 }
+function personaOf(c){ return PERSONAS.find(p=>p.name===c.name) || PERSONAS[5]; }
 
 function tickCompetitors(){
   const rankBefore = competitorRank();
@@ -162,28 +207,32 @@ function tickCompetitors(){
     // gentle mean-reverting growth
     c.followers = Math.max(200, Math.round(c.followers * rand(0.96, 1.06) + c.prestige*3));
     c.prestige  = clamp(c.prestige + rand(-1.2, 1.4), 1, 99);
-    // brands make moves — some weeks they win, some they fumble
+    // brands make moves that fit who they are
     if(Math.random()<0.28){
-      const move = pick(['drop','viral','collab','flop','scandal']);
+      const P = personaOf(c);
+      // weighted pick from the persona's move table
+      let roll = Math.random(), move = 'drop', acc = 0;
+      for(const [m,w] of Object.entries(P.moves)){ acc += w; if(roll<=acc){ move = m; break; } }
       if(move==='drop'){
-        feedPost('sys', null, `${c.name} released a limited capsule. Sold out fast.`);
-        c.followers += ri(200, 900); c.prestige = clamp(c.prestige+1, 1, 99);
+        feedPost('press', 'DROPFEED', P.lines.drop);
+        c.followers += c.name==='NOVA'? ri(600,1600) : c.name==='VOID'? ri(50,200) : ri(200,900);
+        c.prestige = clamp(c.prestige + (c.name==='VOID'||c.name==='OBSIDIAN'? 1.5 : 0.7), 1, 99);
         if(Math.random()<0.5) G.hype = clamp(G.hype-2, 0, 100);   // they soak up attention
       } else if(move==='viral'){
-        feedPost('sys', null, `A ${c.name} piece went viral overnight. Their comments are chaos.`);
-        c.followers += ri(600, 2200);
+        feedPost('press', 'DROPFEED', P.lines.viral);
+        c.followers += c.name==='PAPER CROWN'||c.name==='OUTLAW'? ri(1200,3000) : ri(500,1600);
       } else if(move==='collab'){
         const other = pick(G.competitors.filter(x=>x!==c)) || c;
-        feedPost('sys', null, `${c.name} × ${other.name} collab announced. The scene is talking.`);
+        feedPost('press', 'DROPFEED', `${c.name} × ${other.name} collab announced. Nobody saw that pairing coming.`);
         c.followers += ri(300, 1000); other.followers += ri(200, 600);
       } else if(move==='flop'){
-        feedPost('sys', null, `${c.name}'s new line is sitting. Markdown rumours already.`);
-        c.followers = Math.max(200, c.followers - ri(200, 900));
-        c.prestige = clamp(c.prestige-2, 1, 99);
+        feedPost('press', 'DROPFEED', P.lines.flop);
+        c.followers = Math.max(200, c.followers - (c.name==='PAPER CROWN'? ri(800,2000) : ri(200,900)));
+        c.prestige = clamp(c.prestige - (c.name==='VOID'? 0 : 2), 1, 99);   // VOID flops read as mystique
       } else {
-        feedPost('sys', null, `${c.name} caught in a quality scandal — peeling prints everywhere.`);
+        feedPost('press', 'DROPFEED', P.lines.scandal);
         c.followers = Math.max(200, c.followers - ri(400, 1500));
-        c.prestige = clamp(c.prestige-4, 1, 99);
+        c.prestige = clamp(c.prestige - (c.name==='NOVA'? 1 : 4), 1, 99);   // NOVA handles crises well
       }
     }
   });

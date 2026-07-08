@@ -25,6 +25,20 @@ function loadGame(){
     s.difficulty   = s.difficulty   || 'normal';
     s.tut          = s.tut          || {};
     s.botStreak    = s.botStreak    || 0;
+    // v1.2 migrations
+    s.dna          = s.dna          || 'vintage';
+    s.milestones   = s.milestones   || {};
+    s.history.weekly = s.history.weekly || [];
+    if(s.stats.lifetimeProfit===undefined) s.stats.lifetimeProfit = 0;
+    // old randomly-named competitors become the fixed personas, keeping their numbers
+    if(s.competitors && s.competitors.length && !s.competitors[0].style){
+      s.competitors = s.competitors.map((c,i)=>({
+        ...PERSONAS[i%PERSONAS.length],
+        name: PERSONAS[i%PERSONAS.length].name,
+        style: PERSONAS[i%PERSONAS.length].style,
+        followers: c.followers, prestige: c.prestige, quality: c.quality,
+      })).map(({moves,lines,f,p,...keep})=>keep);
+    }
     return s;
   }catch(e){ return null; }
 }

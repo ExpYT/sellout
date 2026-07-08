@@ -15,6 +15,10 @@
   <h1>STREETWEAR <span>EMPIRE</span></h1>
   <p>Start in your bedroom with a heat press and a dream. Design collections, run limited drops, build a community — and grow one of the most respected labels in the world.</p>
   <input id="startName" type="text" maxlength="20" placeholder="NAME YOUR BRAND" spellcheck="false">
+  <div style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em;margin-top:4px">Brand DNA</div>
+  <div class="opt-row" id="dnaRow" style="justify-content:center;max-width:640px"></div>
+  <div id="dnaBlurb" style="font-size:12px;color:var(--dim);height:18px"></div>
+  <div style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em">Difficulty</div>
   <div class="opt-row" id="diffRow" style="justify-content:center"></div>
   <div id="diffBlurb" style="font-size:12px;color:var(--dim);height:18px"></div>
   <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center">
@@ -60,11 +64,16 @@
       <div class="card"><h3>Avg Sellout Time</h3><div class="big-stat" id="dSellout">—</div><div class="sub-stat" id="dSelloutSub">across recent drops</div></div>
       <div class="card"><h3>Avg Resale Value</h3><div class="big-stat" id="dResale">—</div><div class="sub-stat">vs retail</div></div>
     </div>
-    <div class="grid grid-2" style="margin-bottom:16px">
+    <div class="grid grid-3" style="margin-bottom:16px">
       <div class="card"><h3>Follower Growth</h3><canvas class="chart" id="chartFollowers"></canvas></div>
       <div class="card"><h3>Revenue by Drop</h3><canvas class="chart" id="chartRevenue"></canvas></div>
+      <div class="card"><h3>Weekly Profit</h3><canvas class="chart" id="chartProfit"></canvas></div>
     </div>
     <div class="grid grid-2">
+      <div class="card">
+        <h3>Brand Identity</h3>
+        <div id="identityBox"></div>
+      </div>
       <div class="card">
         <h3>Brand Health</h3>
         <div id="brandMeters"></div>
@@ -80,6 +89,14 @@
       <div class="card">
         <h3>Community Feed</h3>
         <div id="feedList" style="max-height:280px; overflow-y:auto"></div>
+      </div>
+      <div class="card">
+        <h3>Lifetime Records</h3>
+        <div id="recordsBox"></div>
+      </div>
+      <div class="card">
+        <h3>🏆 Milestones</h3>
+        <div id="milestonesBox" style="max-height:240px;overflow-y:auto"></div>
       </div>
       <div class="card">
         <h3>Settings &amp; Save</h3>
@@ -177,13 +194,17 @@
   <!-- ========== HISTORY ========== -->
   <div class="page" id="page-history">
     <div class="card">
-      <h3>Drop History &amp; Resale Market</h3>
+      <h3>Collection Archive — the history of your brand</h3>
+      <div class="sub-stat" style="margin-bottom:10px">Click any collection for its full archive card and critic review.</div>
       <div class="opt-row" id="histFilters" style="margin-bottom:12px">
-        <button class="opt sel" data-hf="all">All</button>
+        <button class="opt sel" data-hf="all">Newest</button>
+        <button class="opt" data-hf="oldest">Oldest</button>
         <button class="opt" data-hf="soldout">Sellouts</button>
         <button class="opt" data-hf="flop">Undersold</button>
         <button class="opt" data-hf="profit">Most Profitable</button>
+        <button class="opt" data-hf="rating">Highest Rated</button>
         <button class="opt" data-hf="resale">Highest Resale</button>
+        <button class="opt" data-hf="fastest">Fastest Sellout</button>
       </div>
       <div id="historyList"></div>
     </div>

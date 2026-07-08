@@ -92,18 +92,61 @@ function runChannel(id){
   const mkt = empBonus('marketing');
   const photo = empBonus('photographer');
   let gain = rand(ch.base[0], ch.base[1]) * (1 + mkt*0.8);
+  gain *= (dna().mkt && dna().mkt[id]) || 1;   // your DNA's home channel hits harder
   let note = '';
 
   if(id==='tiktok'){
-    if(Math.random() < 0.14 + mkt*0.1){ gain *= 3; note = ' — it took off overnight 🔥'; feedPost('hot', pick(HANDLES), `that ${G.brand} video is EVERYWHERE rn`); }
+    if(Math.random() < 0.14 + mkt*0.1){ gain *= 3; note = ' — it took off overnight 🔥'; feedPost('hot', pick(HANDLES), `that ${G.brand} video is EVERYWHERE rn`); G.stats.hadViral = true; }
     else if(Math.random()<0.3){ gain *= 0.3; note = ' — barely any views.'; }
   }
   if(id==='lookbook'){ gain *= (1 + photo*0.7); if(photo>0) note = ' — the photography carried it.'; }
   if(id==='email'){ G.loyalty = clamp(G.loyalty+2, 0, 100); note = ' — the community feels looped in.'; }
 
+  // remember your best campaign ever for the records board
+  if(!G.stats.bestCampaign || gain > G.stats.bestCampaign.gain)
+    G.stats.bestCampaign = {name:ch.name, gain:+gain.toFixed(1), week:G.week};
+
   G.hype = clamp(G.hype + gain, 0, 100);
+  checkMilestones();
   toast(`+${gain.toFixed(1)} hype${note}`);
   saveGame(); renderAll();
+}
+
+/* ---------------- collection reviews ----------------
+   Every release gets a critic score across six categories,
+   an overall /100, stars, and a written verdict.           */
+const REVIEW_PRAISE = {
+  design:'the design language is genuinely strong', quality:'construction that punches above its weight',
+  value:'priced with unusual respect for the buyer', packaging:'an unboxing that feels like an event',
+  exclusivity:'scarcity handled with real discipline', hype:'a rollout the whole scene watched',
+};
+const REVIEW_KNOCK = {
+  design:'a design that plays it too safe', quality:'materials that undercut the ambition',
+  value:'ambitious pricing the product can\'t quite justify', packaging:'packaging that feels like an afterthought',
+  exclusivity:'a run size that dilutes the moment', hype:'a launch that arrived to a quiet room',
+};
+function generateReview(col, sim, price, hypeAt){
+  const S = {
+    design:      clamp(col.quality*0.62 + (col.theme===G.trend.theme?1.4:0) + (col.staleTheme?-1.4:0) + rand(0,1.6), 1, 10),
+    quality:     clamp(col.quality + rand(-0.5,0.5), 1, 10),
+    value:       clamp(8 - Math.max(0,(price/col.productObj.retail-1))*5.5 + (col.quality-5.5)*0.55, 1, 10),
+    packaging:   clamp({poly:4.5, box:8.6, eco:7.2}[col.packaging] + rand(-0.5,1), 1, 10),
+    exclusivity: clamp(sim.soldOut? 5 + Math.min(5, sim.scarcity*1.7) : 2.5 + (sim.sold/col.qty)*2, 1, 10),
+    hype:        clamp(hypeAt/10 + rand(0,1), 1, 10),
+  };
+  Object.keys(S).forEach(k=>S[k]=+S[k].toFixed(1));
+  // design & quality weigh heaviest in the verdict
+  const overall = Math.round((S.design*2 + S.quality*2 + S.value*1.5 + S.packaging*0.8 + S.exclusivity*1.6 + S.hype*1.1) / 9 * 10);
+  const stars = clamp(Math.round(overall/20), 1, 5);
+  const entries = Object.entries(S);
+  const best  = entries.reduce((a,b)=>b[1]>a[1]?b:a);
+  const worst = entries.reduce((a,b)=>b[1]<a[1]?b:a);
+  let text;
+  if(overall>=88)      text = `A statement collection — ${REVIEW_PRAISE[best[0]]}. This is what ${G.brand} sounds like at full volume.`;
+  else if(overall>=70) text = `A strong release carried by ${REVIEW_PRAISE[best[0]]}, held back only by ${REVIEW_KNOCK[worst[0]]}.`;
+  else if(overall>=50) text = `A mixed outing: ${REVIEW_PRAISE[best[0]]}, but ${REVIEW_KNOCK[worst[0]]} keeps it from landing.`;
+  else                 text = `A miss. ${REVIEW_KNOCK[worst[0]].charAt(0).toUpperCase()+REVIEW_KNOCK[worst[0]].slice(1)}, and the scene noticed.`;
+  return {scores:S, overall, stars, text, best:best[0], worst:worst[0]};
 }
 
 /* ---------------- launch ---------------- */
@@ -119,6 +162,7 @@ function launchDrop(){
   G.cash -= prodCost;
   G.weekLog.expenses += prodCost;
   G.droppedThisWeek = true;
+  const hypeAt = G.hype;   // hype the drop launched with, before results move it
 
   const sim = simulateDrop(col, qty, price, {limit:col.limit});
   const revenue = sim.sold * price;
@@ -126,8 +170,19 @@ function launchDrop(){
   G.weekLog.revenue += revenue;
   G.stats.lifetimeSales   += sim.sold;
   G.stats.lifetimeRevenue += revenue;
+  G.stats.lifetimeProfit   = (G.stats.lifetimeProfit||0) + revenue - prodCost;
+  if(sim.scarcity>=3) G.stats.hadViral = true;   // demand 3x supply = a viral moment
 
   applyDropConsequences(col, qty, price, sim, revenue - prodCost);
+  const review = generateReview(col, sim, price, hypeAt);
+
+  // which crowd carried the drop, which one shrugged (loyal core excluded)
+  const segEntries = Object.entries(sim.perSegment).filter(([k])=>k!=='_loyal');
+  const segNames = {collector:'Collectors', street:'Streetwear Fans', casual:'Casual Buyers', enthusiast:'Fashion Enthusiasts', luxury:'Luxury Buyers'};
+  const bestSeg  = segNames[segEntries.reduce((a,b)=>b[1]>a[1]?b:a)[0]];
+  const worstSeg = segNames[segEntries.reduce((a,b)=>b[1]<a[1]?b:a)[0]];
+  const goods = (sim.factors||[]).filter(f=>f[2]==='good');
+  const bads  = (sim.factors||[]).filter(f=>f[2]==='bad');
 
   const record = {
     name:col.name, week:G.week, product:col.productObj.name, theme:col.theme,
@@ -135,11 +190,21 @@ function launchDrop(){
     resale:sim.resaleFinal, resaleNow:sim.resaleFinal, quality:col.quality,
     revenue, profit: revenue - prodCost, resellerShare:sim.resellerShare,
     leftover: sim.leftover||0,
+    // v1.2 archive data
+    priceRatio: +(price/col.productObj.retail).toFixed(2),
+    hypeAt: Math.round(hypeAt),
+    trendHit: col.theme===G.trend.theme || col.product===G.trend.product,
+    limitUsed: col.limit,
+    bestSeg, worstSeg,
+    topGood: goods.length? goods[0][0] : null,
+    topBad:  bads.length?  bads[0][0]  : null,
+    review,
   };
   G.drops.push(record);
   G.history.revenue.push({name:col.name, v:revenue});
   if(G.history.revenue.length>10) G.history.revenue.shift();
   G.readyDrop = null;
+  checkMilestones();
 
   playLaunch(col, qty, sim, ()=> showDropResults(record, sim, prodCost));
   saveGame();
@@ -281,14 +346,48 @@ function showDropResults(rec, sim, prodCost){
       <span style="flex-shrink:0">${tone==='good'?'<span style="color:var(--green)">▲</span>':tone==='bad'?'<span style="color:var(--red)">▼</span>':'·'}</span>
       <span><b>${label}</b> — <span style="color:var(--dim)">${text}</span></span></div>`).join('');
 
+  // 2–4 believable customer comments, styled by who actually bought
+  const CUST = {
+    collector: rec.quality>=6? [`Grail potential. The ${rec.product.toLowerCase()} is going straight into the archive.`, `Numbered, well-made, worth the chase. This is why I collect ${G.brand}.`]
+                             : [`As a collector… this one stays in the store. Quality isn't archive-tier.`],
+    street:    rec.soldOut? [`Best ${rec.product.toLowerCase()} I've bought this year. Wore it out the same night.`, `The fit on this is stupid good. ${G.brand} knows exactly who they are.`]
+                          : [`It's fine. Just fine. And "fine" doesn't sell out.`],
+    casual:    rec.priceRatio<=1.05? [`Worth every cent. Shipping was quick too.`, `Finally copped without a fight. More of this please.`]
+                                   : [`Nice piece but that price hurt. Might sit the next one out.`],
+    luxury:    rec.quality>=7? [`Packaging felt premium before I even touched the garment. Details matter.`]
+                             : [`At this positioning I expected better hand-feel. Noted.`],
+    reseller:  rec.resale>rec.price*1.5? [`Already doubled my money. Pleasure doing business.`]
+                                       : [`Resale is flat. This one's a wear, not a flip.`],
+    missed:    rec.soldOut? [`Missed checkout AGAIN. Restock or I riot.`, `Cart emptied at payment. I just want to give you money??`] : [],
+  };
+  const pools = Object.values(CUST).filter(p=>p.length);
+  const picked = [];
+  for(let i=0; i<3 && pools.length; i++){
+    const p = pools.splice(Math.floor(Math.random()*pools.length),1)[0];
+    picked.push(pick(p));
+  }
+  const custHtml = picked.map(t=>`<div style="font-size:12.5px;margin:5px 0;color:var(--txt)">“${t}” <span style="color:var(--dim)">— verified buyer</span></div>`).join('');
+
+  const rv = rec.review;
+  const reviewHtml = rv? `
+    <div style="background:var(--panel2);border-radius:8px;padding:12px 14px;margin:12px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="color:var(--gold);font-size:16px;letter-spacing:2px">${'★'.repeat(rv.stars)}${'☆'.repeat(5-rv.stars)}</span>
+        <b style="font-size:18px;color:${rv.overall>=70?'var(--green)':rv.overall>=50?'var(--gold)':'var(--red)'}">${rv.overall}/100</b>
+      </div>
+      <div style="font-size:12.5px;color:var(--dim);margin-top:6px;font-style:italic">“${rv.text}”</div>
+      <div style="font-size:11px;color:var(--dim);margin-top:8px">${Object.entries(rv.scores).map(([k,v])=>`${k} <b style="color:var(--txt)">${v}</b>`).join(' · ')}</div>
+    </div>` : '';
+
   const firstTime = G.drops.length===1?
     `<div style="background:var(--panel2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--dim);margin-bottom:12px">💡 Every drop gets this breakdown. The ▲▼ factors below are the game telling you exactly what the market rewards — learn them and your next drop hits harder.</div>` : '';
 
   showModal(rec.soldOut? 'SOLD OUT' : (rec.sold/rec.qty>=0.7? 'SOLID NUMBERS':'IT SAT'),
     rec.soldOut? 'good' : (rec.sold/rec.qty>=0.7?'info':'bad'),
-    firstTime + head +
+    firstTime + head + reviewHtml +
     `<div style="margin:14px 0 4px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Who showed up</div>${who}` +
-    `<div style="margin:14px 0 2px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Why it went this way</div>${why}`,
+    `<div style="margin:14px 0 2px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Why it went this way</div>${why}` +
+    `<div style="margin:14px 0 2px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Customer voices</div>${custHtml}`,
     [{label:'CONTINUE', cls:'primary', fn:()=>{ renderAll(); }}]);
 }
 
@@ -311,10 +410,22 @@ function playLaunch(col, qty, sim, done){
   launchDone = finish;
   const T=(fn,ms)=>launchTimers.push(setTimeout(fn,ms));
 
-  ['3','2','1','LIVE'].forEach((c,i)=>T(()=>{ $id('launchStatus').textContent = c==='LIVE'?'⚡ LIVE':('DROPS IN '+c); }, 380*i));
+  // pre-launch build-up: the site coming alive
+  const prelude = ['PREPARING WEBSITE…','OPENING QUEUE…','CUSTOMERS ENTERING…','TRAFFIC INCREASING…','⚡ LIVE'];
+  prelude.forEach((s,i)=>T(()=>{ $id('launchStatus').textContent = s; }, 420*i));
+  const start = 420*prelude.length;
 
   const pct = Math.round(100*sim.sold/qty);
-  const dur = sim.soldOut ? (sim.totalDemand/qty>=2.5? 900:1500) : 2300;
+  const dur = sim.soldOut ? (sim.totalDemand/qty>=2.5? 1100:1700) : 2400;
+
+  // mid-launch status beats, tailored to what's actually happening
+  const beats = [];
+  if(sim.perSegment.collector>qty*0.05) beats.push('COLLECTORS PURCHASING…');
+  if(sim.resellerBuys>qty*0.1) beats.push('🤖 RESELLERS DETECTED…');
+  beats.push(sim.soldOut? 'STOCK MOVING FAST…' : 'STOCK MOVING…');
+  if(sim.soldOut && sim.totalDemand/qty>=2) beats.push('SERVERS STRAINING…');
+  beats.forEach((s,i)=>T(()=>{ $id('launchStatus').textContent = s; }, start + (dur/(beats.length+1))*(i+1)));
+
   T(()=>{
     bar.style.transition = `width ${dur}ms ${sim.soldOut?'cubic-bezier(.6,0,.8,.4)':'cubic-bezier(.2,.8,.4,1)'}`;
     bar.style.width = pct+'%';
@@ -327,13 +438,17 @@ function playLaunch(col, qty, sim, done){
       if(p<1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  }, 1650);
+  }, start);
   T(()=>{
     const st=$id('launchStamp');
-    if(sim.soldOut){ st.textContent='SOLD OUT'; st.className='w'; }
-    else if(pct>=70){ st.textContent='SOLID'; st.className='e'; }
-    else { st.textContent='UNDERSOLD'; st.className='l'; }
-  }, 1650+dur+100);
-  T(finish, 1650+dur+1200);
+    if(sim.soldOut){
+      const t = sim.selloutMin<1? Math.round(sim.selloutMin*60)+' SECONDS' : sim.selloutMin+' MINUTES';
+      st.textContent='SOLD OUT — '+t; st.className='w';
+      $id('launchStatus').textContent='';
+    }
+    else if(pct>=70){ st.textContent='SOLID NUMBERS'; st.className='e'; $id('launchStatus').textContent='INVENTORY REMAINING'; }
+    else { st.textContent='UNDERSOLD'; st.className='l'; $id('launchStatus').textContent='INVENTORY REMAINING'; }
+  }, start+dur+100);
+  T(finish, start+dur+1300);
   bg.onclick = ()=>{ if(launchDone) launchDone(); };
 }

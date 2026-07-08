@@ -88,6 +88,70 @@ const PRESTIGE_TIERS = [
 
 const HANDLES = ['@dripcheck','@fitpicdaily','@sole.archive','@copthis','@modline','@waitlisted','@offrack','@stitchwatch','@carted','@lowkeyheat','@qualitycrit','@pressplayfits'];
 
+/* Brand DNA — the founding identity chosen at creation. Gentle nudges,
+   never locks: behaviour can evolve the brand anywhere from here.     */
+const DNAS = [
+  {id:'minimal',   name:'Minimalist',          followers:150, seg:{luxury:.10, enthusiast:.10},              mkt:{teaser:1.25},   blurb:'Clean lines, tonal palettes, quiet confidence.'},
+  {id:'luxury',    name:'Luxury',              followers:110, seg:{luxury:.20, collector:.08, casual:-.10},  mkt:{lookbook:1.3},  blurb:'Price is part of the design. Casuals need not apply.'},
+  {id:'skate',     name:'Skate',               followers:220, seg:{street:.15, casual:.08, luxury:-.10},     mkt:{tiktok:1.3},    blurb:'Built in car parks and skate shops. Loud and loyal.'},
+  {id:'tech',      name:'Techwear',            followers:140, seg:{enthusiast:.15, collector:.10, casual:-.05}, mkt:{teaser:1.2}, blurb:'Straps, zips, function. The future has pockets.'},
+  {id:'vintage',   name:'Vintage',             followers:170, seg:{enthusiast:.10, collector:.10},           mkt:{post:1.25},     blurb:'Washed, faded, timeless. Nostalgia as a fabric.'},
+  {id:'y2k',       name:'Y2K',                 followers:240, seg:{casual:.12, street:.10, luxury:-.05},     mkt:{tiktok:1.35},   blurb:'Low rises, loud graphics, flip-phone energy.'},
+  {id:'japanese',  name:'Japanese Streetwear', followers:130, seg:{collector:.15, enthusiast:.10, luxury:.05, casual:-.05}, mkt:{lookbook:1.25}, blurb:'Heavyweight fabrics, obsessive detail, devoted fans.'},
+  {id:'motorsport',name:'Motorsport',          followers:200, seg:{street:.10, casual:.12},                  mkt:{tiktok:1.2},    blurb:'Racing patches, big logos, speed as a lifestyle.'},
+  {id:'outdoor',   name:'Outdoor',             followers:180, seg:{enthusiast:.08, casual:.10},              mkt:{post:1.2},      blurb:'Gorpcore. Trail-ready gear that never sees a trail.'},
+  {id:'highfash',  name:'High Fashion',        followers:100, seg:{luxury:.25, enthusiast:.12, casual:-.15, street:-.05}, mkt:{lookbook:1.35}, blurb:'Runway sensibilities at street level. Divisive on purpose.'},
+];
+function dna(){ return DNAS.find(d=>d.id===(G&&G.dna)) || DNAS[4]; }
+
+/* Milestones — permanent trophies. Celebration only, no gameplay bonus. */
+const MILESTONES = [
+  {id:'sellout1', name:'First Sellout',        cond:()=>G.drops.some(d=>d.soldOut)},
+  {id:'fol1k',    name:'1,000 Followers',      cond:()=>G.followers>=1000},
+  {id:'fol10k',   name:'10,000 Followers',     cond:()=>G.followers>=10000},
+  {id:'fol100k',  name:'100,000 Followers',    cond:()=>G.followers>=100000},
+  {id:'sold100',  name:'100 Units Sold',       cond:()=>G.stats.lifetimeSales>=100},
+  {id:'sold1k',   name:'1,000 Units Sold',     cond:()=>G.stats.lifetimeSales>=1000},
+  {id:'rev100k',  name:'$100k Lifetime Revenue', cond:()=>G.stats.lifetimeRevenue>=100000},
+  {id:'rev1m',    name:'$1M Lifetime Revenue', cond:()=>G.stats.lifetimeRevenue>=1000000},
+  {id:'viral',    name:'First Viral Moment',   cond:()=>!!G.stats.hadViral},
+  {id:'rated90',  name:'A 90+ Rated Collection', cond:()=>G.drops.some(d=>d.review && d.review.overall>=90)},
+  {id:'flash',    name:'Sub-60-Second Sellout', cond:()=>G.drops.some(d=>d.soldOut && d.selloutMin<1)},
+  {id:'col10',    name:'10 Collections Released', cond:()=>G.drops.length>=10},
+  {id:'luxstat',  name:'Luxury Status',        cond:()=>G.prestige>=75},
+  {id:'icon',     name:'Fashion Icon',         cond:()=>G.prestige>=92},
+];
+function checkMilestones(){
+  MILESTONES.forEach(m=>{
+    if(!G.milestones[m.id] && m.cond()){
+      G.milestones[m.id] = G.week;
+      toast('🏆 MILESTONE: '+m.name, 'gold');
+      feedPost('press', 'THE RECORD', `${G.brand} hits a milestone: ${m.name}.`);
+    }
+  });
+}
+
+/* Dynamic brand personality — read from how you actually play.
+   Recomputed from the last 6 drops; evolves as behaviour changes. */
+function brandPersonality(){
+  const D = G.drops.slice(-6);
+  if(D.length<2) return ['Emerging'];
+  const avg = f => D.reduce((a,d)=>a+f(d),0)/D.length;
+  const rate = f => D.filter(f).length/D.length;
+  const t = [];
+  if(avg(d=>d.qty)<=300 && rate(d=>d.soldOut)>=0.7) t.push('Exclusive');
+  if(avg(d=>d.quality)>=7 && avg(d=>d.priceRatio||1)>=1.2) t.push('Premium');
+  if(avg(d=>d.priceRatio||1)<=0.95) t.push('Affordable');
+  if(avg(d=>d.quality)>=7.3 && !t.includes('Premium')) t.push('Quality Focused');
+  if(rate(d=>d.trendHit)>=0.6) t.push('Trend Chaser');
+  if(G.loyalty>=65 && rate(d=>d.limitUsed && d.limitUsed!=='none')>=0.5) t.push('Community Driven');
+  if(avg(d=>d.hypeAt||0)>=55) t.push('Hype Focused');
+  if(new Set(D.map(d=>d.theme)).size>=Math.min(5,D.length)) t.push('Innovative');
+  if(G.followers<3000 && G.prestige>=25) t.push('Underground');
+  if(avg(d=>d.priceRatio||1)>=1.5 && G.prestige>=40) t.push('Luxury');
+  return t.length? t.slice(0,3) : ['Finding Its Voice'];
+}
+
 // Difficulty shapes the whole run: starting cash, market appetite, cost pressure, debt tolerance.
 const DIFFS = {
   casual:  {name:'Casual',   cash:4500, demand:1.15, cost:0.90, debtLimit:4, blurb:'Forgiving market, cheap rent. Learn the ropes.'},
@@ -99,14 +163,16 @@ function diff(){ return DIFFS[(G && G.difficulty)||'normal']; }
 /* ---------------- global state ---------------- */
 let G = null;
 
-function newGame(brand, difficulty){
+function newGame(brand, difficulty, dnaId){
   difficulty = difficulty || 'normal';
+  const D = DNAS.find(d=>d.id===dnaId) || DNAS[4];
   G = {
     brand,
     difficulty,
+    dna: D.id,
     week: 1,
     cash: DIFFS[difficulty].cash,
-    followers: 150,
+    followers: D.followers,
     hype: 5,             // volatile, decays weekly
     prestige: 2,         // 0–100, hard to earn
     loyalty: 50,         // community loyalty 0–100
@@ -132,8 +198,12 @@ function newGame(brand, difficulty){
     eventMods: {},       // temporary modifiers set by events
     tut: {},             // tutorial steps already shown
     botStreak: 0,        // consecutive drops lost to resellers
+    milestones: {},      // milestone id -> week earned
   };
-  feedPost('sys', null, `${brand} founded in a bedroom. One heat press, ${fmt$(G.cash)}, and taste.`);
+  G.history.weekly = [];
+  G.history.followers = [D.followers];
+  feedPost('sys', null, `${brand} founded in a bedroom. One heat press, ${fmt$(G.cash)}, and a ${D.name.toLowerCase()} vision.`);
+  feedPost('press', 'THREADWATCH', `New label alert: ${brand} — ${D.blurb.toLowerCase()}`);
 }
 
 /* ---------------- derived values ---------------- */
@@ -198,16 +268,23 @@ function advanceWeek(){
     feedPost('sys', null, `Trend report: "${G.trend.theme}" energy and ${PRODUCTS.find(p=>p.id===G.trend.product).name.toLowerCase()}s are having a moment.`);
   }
 
-  // 9. Reset weekly counters
+  // 9. Reset weekly counters + record history for the analytics charts
   G.week++;
   G.droppedThisWeek = false;
   G.usedChannels = {};
   G.eventMods = {};
   G.history.followers.push(G.followers);
   if(G.history.followers.length>52) G.history.followers.shift();
+  G.history.weekly = G.history.weekly||[];
+  G.history.weekly.push(G.lastProfit);
+  if(G.history.weekly.length>52) G.history.weekly.shift();
   G.weekLog = {revenue:0, expenses:0};
 
-  // 10. Random events need decisions
+  // 10. The culture keeps talking whether you drop or not
+  if(Math.random()<0.45) pressPost();
+  checkMilestones();
+
+  // 11. Random events need decisions
   const ev = maybeEvent();
 
   saveGame();

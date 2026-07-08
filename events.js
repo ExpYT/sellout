@@ -127,11 +127,53 @@ const EVENTS = [
   },
 ];
 
-/* Roll an event ~35% of weeks. Returns the event or null. */
+/* Roll an event ~35% of weeks. Brand DNA gently weights which
+   stories find you (a skate brand gets more community moments,
+   a luxury house gets more press interest).                     */
+const EVENT_DNA_BIAS = {
+  'GIVEAWAY MOMENT':    ['skate','y2k','outdoor','motorsport'],
+  'COMMUNITY MEETUP':   ['skate','y2k','vintage','outdoor'],
+  'MAGAZINE FEATURE':   ['luxury','highfash','japanese','minimal'],
+  'INFLUENCER SPOTTED': ['y2k','motorsport','tech'],
+};
 function maybeEvent(){
   if(Math.random()>0.35) return null;
-  const pool = EVENTS.filter(e=>!e.cond || e.cond());
+  const pool = [];
+  EVENTS.forEach(e=>{
+    if(e.cond && !e.cond()) return;
+    pool.push(e);
+    if((EVENT_DNA_BIAS[e.title]||[]).includes(G.dna)) pool.push(e);  // double weight for on-DNA stories
+  });
   return pool.length? pick(pool) : null;
+}
+
+/* ---------------- the living culture ----------------
+   Weekly press posts: headlines, blogs, rumours, memes.
+   The world talks whether you drop or not.             */
+function pressPost(){
+  const comp = pick(G.competitors);
+  const trendProd = PRODUCTS.find(p=>p.id===G.trend.product).name.toLowerCase();
+  const lastDrop = G.drops[G.drops.length-1];
+  const lines = [
+    ['THREADWATCH',  `“${G.trend.theme}” is the look of the season. Every moodboard agrees.`],
+    ['THREADWATCH',  `Trend desk: ${trendProd}s are carrying the quarter. Brands are scrambling.`],
+    ['RACKED DAILY', `Is ${comp.name} overrated? The comment section is at war.`],
+    ['RACKED DAILY', `Power ranking update: ${comp.name} ${pick(['climbs','slips','holds steady'])} this week.`],
+    ['FITTALK FORUM',`Thread: “most slept-on brands right now” — ${G.brand} mentioned ${ri(2,40)} times.`],
+    ['FITTALK FORUM',`Poll: cop or drop at ${fmt$(ri(60,240))}? The replies are brutal.`],
+    ['MEME WATCH',   `“me refreshing the ${G.brand} site at 9:59am” — ${fmtN(ri(4,80))}k likes.`],
+    ['RUMOR MILL',   `Insider: a major stockist has been quietly watching ${G.brand}. Nothing confirmed.`],
+    ['RUMOR MILL',   `Whispers of a ${comp.name} collab falling apart last minute. Both sides silent.`],
+  ];
+  if(lastDrop) lines.push(
+    ['RACKED DAILY', lastDrop.soldOut? `Recap: ${G.brand}'s “${lastDrop.name}” ${lastDrop.selloutMin<1?'evaporated in seconds':'sold through'} — ${lastDrop.review? lastDrop.review.overall+'/100 from critics':'the scene approves'}.`
+                                     : `Recap: ${G.brand}'s “${lastDrop.name}” is still available. In this economy, that's a statement too.`]);
+  if(G.prestige>=30){
+    const soulmate = {minimal:'KITSUNE', luxury:'OBSIDIAN', highfash:'OBSIDIAN', japanese:'KITSUNE', skate:'OUTLAW', y2k:'PAPER CROWN', motorsport:'OUTLAW', vintage:'NOVA', outdoor:'NOVA', tech:'VOID'}[G.dna]||'NOVA';
+    lines.push(['RACKED DAILY', `Blogs keep calling ${G.brand} “the ${pick(['accessible','harder-working','next','thinking person\'s'])} ${soulmate}”. ${soulmate} fans disagree. Loudly.`]);
+  }
+  const [outlet, text] = pick(lines);
+  feedPost('press', outlet, text);
 }
 
 function showEvent(ev){
