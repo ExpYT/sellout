@@ -203,6 +203,9 @@
 <div id="hdr" style="display:none">
   <div id="brandName">—</div>
   <div class="stat"><span class="lbl">Week</span><span class="val" id="stWeek">1</span></div>
+  <div class="stat"><span class="lbl">Time</span><span class="val" id="stSlots" style="color:var(--red);letter-spacing:2px">●●●</span></div>
+  <button id="endWeekBtn" style="background:var(--red);border:none;color:#fff;font-family:'Archivo Black';font-size:12px;padding:8px 12px">END WEEK ▸</button>
+  <button id="skipMonthBtn" style="background:none;border:1px solid var(--line);color:var(--dim);font-family:'Archivo Black';font-size:11px;padding:8px 10px" title="advance until something happens">▸▸ MONTH</button>
   <div class="stat"><span class="lbl">Cash</span><span class="val" id="stCash">$0</span></div>
   <div class="stat" id="vaultStat" style="display:none"><span class="lbl">Vault</span><span class="val" id="stVault" style="color:var(--gold)">$0</span></div>
   <div class="stat"><span class="lbl">Burn</span><span class="val" id="stBurn" style="color:var(--red);font-size:14px">−$0/wk</span></div>
@@ -470,7 +473,7 @@ function newGame(label){
     lastTypeId:null, typeStreak:0, upgrades:{}, debtWeeks:0,
     crew:{designer:null, plug:null, production:null},
     collection:null, pendingConcept:null,
-    tier:0, promo:null, promoCooldown:0, deals:[], pipe:null,
+    tier:0, promo:null, promoCooldown:0, deals:[], pipe:null, slots:3,
     trendHot:hot, trendCold:pick(TYPES.filter(t=>t.id!==hot)).id,
     stock:null,               // {name,type,units,price}
     drops:[],                 // archive
@@ -519,6 +522,15 @@ function bumpMood(m, amt){
 }
 function crewWages(){
   return CREW_ROLES.reduce((a,r)=>a+((S.crew && S.crew[r.id])? S.crew[r.id].wage:0), 0);
+}
+function spendSlots(n){
+  if((S.slots===undefined?3:S.slots) < n){ toast('NO TIME LEFT — END THE WEEK'); return false; }
+  S.slots -= n;
+  return true;
+}
+function maybeEnd(){
+  if(S.slots<=0){ toast('WEEK OVER'); endWeek(); }
+  else { save(); render(); }
 }
 function weeklyBurn(){
   return 150 + Math.round(S.hype*6) + crewWages()
@@ -580,6 +592,8 @@ function vaultValue(){
 function render(){
   el('brandName').textContent = S.label;
   el('stWeek').textContent = S.week;
+  const sl = S.slots===undefined? 3 : S.slots;
+  el('stSlots').textContent = '●'.repeat(sl) + '○'.repeat(3-sl);
   setCash(S.cash);
   el('stCash').style.color = S.cash<0? 'var(--red)':'';
   el('stBurn').textContent = '−'+fmt$(weeklyBurn())+'/wk';
@@ -651,8 +665,10 @@ function renderSliders(){
      : S.trendCold===selType.id ? ' <span style="color:#7ad7ff">(🧊 out of season — demand −30%)</span>':'') +
     (S.promo==='armed'? `<br><span class="warn" style="color:var(--gold)">⚡ BREAKOUT CHALLENGE ARMED — THIS DROP MUST SELL OUT</span>`:'') +
     `<br>Undersupply = instant sellout, hype + resale. Oversupply = a brick.`;
-  el('dropBtn').disabled = !afford || S.stock!==null;
+  const noTime = (S.slots===undefined?3:S.slots) < 2;
+  el('dropBtn').disabled = !afford || S.stock!==null || noTime;
   el('dropBtn').textContent = S.stock!==null ? 'CLEAR OLD STOCK FIRST (ARCHIVE TAB)'
+    : noTime? '⏳ NO TIME — A DROP TAKES 2 SLOTS'
     : !afford? 'CAN’T AFFORD THIS RUN'
     : relC? '👑 RELEASE '+relC.name : 'DROP IT';
 }
@@ -692,7 +708,7 @@ function renderMkt(){
     const b = document.createElement('button');
     b.className='actBtn';
     b.innerHTML = `<span><span class="an">${m.n}</span><br><span class="ad">${m.d}</span></span><span class="ac">${m.c?fmt$(m.c):'+$500'}</span>`;
-    b.disabled = m.c>0 && S.cash < m.c;
+    b.disabled = (m.c>0 && S.cash < m.c) || (S.slots===undefined?3:S.slots) < 1;
     b.onclick = ()=>doMarketing(m.id, m.c);
     el('mktBtns').appendChild(b);
   });
@@ -810,6 +826,7 @@ function doDrop(){
   const type = selType;
   const cost = unitCost(type)*(P.make? P.make.costMult:1)*qty;
   if(S.cash < cost || S.stock) return;
+  if(!spendSlots(2)) return;
   S.cash -= cost;
   const q = relC? (0.8 + relC.quality*0.25)*1.5
           : (S.pendingConcept? S.pendingConcept.q : rand(0.55,1.25)) * (P.make? P.make.makeQ:1) * (P.buzz? P.buzz.mult:1);
@@ -907,7 +924,7 @@ function doDrop(){
   el('stashSlider').value = 0;
   playDropLive({name:fullName, avail, sold, ratio: avail? demand/avail:0, soldOut: demand>=avail}, ()=>{
     sfx(cls==='w' ? 'sellout' : cls==='l' ? 'brick' : 'cash');
-    showModal(title, cls, html, [{label:'NEXT WEEK →', run:endWeek}]);
+    showModal(title, cls, html, [{label:'CONTINUE', run:maybeEnd}]);
   });
 }
 
@@ -975,6 +992,7 @@ function playDropLive(d, done){
 
 function doMarketing(id, cost){
   if(cost>0 && S.cash < cost) return;
+  if(!spendSlots(1)) return;
   S.cash -= cost;
   let html='', title='', cls='e';
   const pl = crewSkill('plug');
@@ -999,7 +1017,7 @@ function doMarketing(id, cost){
   }
   addPost('sys', null, `${S.label}: ${title.toLowerCase()}`);
   if(cls==='w') sfx('cash');
-  showModal(title, cls, html, [{label:'NEXT WEEK →', run:endWeek}]);
+  showModal(title, cls, html, [{label:'CONTINUE', run:maybeEnd}]);
 }
 
 function stockValue(frac){
@@ -1009,13 +1027,14 @@ function stockValue(frac){
 }
 function doOutlet(){
   if(!S.stock) return;
+  if(!spendSlots(1)) return;
   const v = stockValue(0.12);
   S.cash += v;
   S.hype = clamp(S.hype-3, 0, 100);
   addPost('', pick(HANDLES), quote('caught the {L} outlet dump… grail status revoked', ''));
   S.stock = null;
   sfx('cash');
-  showModal('STOCK DUMPED', 'e', `Moved everything through the outlet. <span class="num g">+${fmt$(v)}</span> · <span class="num r">−3 hype</span>`, [{label:'NEXT WEEK →', run:endWeek}]);
+  showModal('STOCK DUMPED', 'e', `Moved everything through the outlet. <span class="num g">+${fmt$(v)}</span> · <span class="num r">−3 hype</span>`, [{label:'CONTINUE', run:maybeEnd}]);
 }
 
 /* ================= DROP PIPELINE ================= */
@@ -1038,7 +1057,7 @@ function renderPipe(){
   });
   for(let i=1;i<=4;i++) el('stage'+i).style.display = (i===stage)? 'block':'none';
   el('collexBtn').style.display = (stage===1 && S.hype>=25 && !S.collection)? 'block':'none';
-  el('collexBtn').disabled = S.cash < 800;
+  el('collexBtn').disabled = S.cash < 800 || (S.slots===undefined?3:S.slots) < 2;
   if(stage===2) renderMakeOpts();
   if(stage===3) renderBuzzOpts();
   if(stage===4) renderPipeSummary();
@@ -1129,19 +1148,21 @@ function sketchConcepts(){
 /* ================= CAPSULE COLLECTION ================= */
 function startCollection(){
   if(S.cash < 800 || S.collection) return;
+  if(!spendSlots(2)) return;
   S.cash -= 800;
   const nm = (el('dropName').value.trim() || randDropName()).toUpperCase() + ' CAPSULE';
   S.collection = {name:nm, weeks:0, quality: 0.5 + crewSkill('designer')*0.2, ready:false};
   addTicker(`${S.label} TEASES “${nm}”`);
   addPost('sys', null, `Work begins on ${nm}. The studio goes dark. No drops until it's done.`);
   sfx('event');
-  save();
-  endWeek();
+  maybeEnd();
 }
 function collexWork(kind){
   const c = S.collection;
   if(!c || c.ready) return;
-  if(kind==='invest'){ if(S.cash<1500) return; S.cash-=1500; c.quality += 0.9; }
+  if(kind==='invest' && S.cash<1500) return;
+  if(!spendSlots(2)) return;
+  if(kind==='invest'){ S.cash-=1500; c.quality += 0.9; }
   else if(kind==='rush'){ c.quality -= 0.7; c.weeks = 2; }
   else { c.quality += 0.35 + crewSkill('designer')*0.12; }
   c.weeks++;
@@ -1151,8 +1172,7 @@ function collexWork(kind){
     toast('COLLECTION READY — RELEASE IT FROM THE DROP TAB');
     sfx('cash');
   }
-  save();
-  endWeek();
+  maybeEnd();
 }
 function renderCollex(){
   const c = S.collection;
@@ -1168,10 +1188,13 @@ function renderCollex(){
       <button class="actBtn" id="cwInvest"><span><span class="an">THROW MONEY AT IT</span><br><span class="ad">Premium fabric, guest artists. Big quality bump.</span></span><span class="ac">$1,500</span></button>
       <button class="actBtn" id="cwRush"><span><span class="an">RUSH IT OUT</span><br><span class="ad">Finish this week. Quality suffers. The scene can smell rushed work.</span></span><span class="ac">RISKY</span></button>
     </div>`;
+  const noStudio = (S.slots===undefined?3:S.slots) < 2;
   el('cwPush').onclick = ()=>collexWork('push');
+  el('cwPush').disabled = noStudio;
   el('cwInvest').onclick = ()=>collexWork('invest');
-  el('cwInvest').disabled = S.cash < 1500;
+  el('cwInvest').disabled = S.cash < 1500 || noStudio;
   el('cwRush').onclick = ()=>collexWork('rush');
+  el('cwRush').disabled = noStudio;
 }
 
 /* ================= CREW ================= */
@@ -1227,8 +1250,9 @@ function pickCrewMember(){
 function endWeek(){
   S.prevHype = S.hype;
   S.week++;
+  S.slots = 3;
   // hype decay — fame is a leaky bucket
-  S.hype = clamp(S.hype - (1 + S.hype*0.045)*(S.upgrades.vault?0.7:1), 0, 100);
+  S.hype = clamp(S.hype - (1 + S.hype*0.055)*(S.upgrades.vault?0.7:1), 0, 100);
   // flagship store moves product every week
   if(S.upgrades.flagship){
     const inc = Math.round(S.hype*60);
@@ -1644,6 +1668,7 @@ function load(){
     s.promoCooldown = s.promoCooldown || 0;
     s.deals = s.deals || [];
     s.pipe = s.pipe || null;
+    if(s.slots===undefined) s.slots = 3;
     CREW_ROLES.forEach(r=>{ const m=s.crew[r.id]; if(m){ if(m.trait===undefined) m.trait='steady'; if(m.mood===undefined) m.mood=70; } });
     if(!s.trendHot){
       s.trendHot = TYPES[1].id;
@@ -1690,6 +1715,15 @@ el('muteBtn').onclick = ()=>{
 };
 el('diceBtn').onclick = ()=>{ el('dropName').value = randDropName(); S.pendingConcept = null; renderSliders(); };
 el('sketchBtn').onclick = sketchConcepts;
+el('endWeekBtn').onclick = ()=>{ if(S) endWeek(); };
+el('skipMonthBtn').onclick = ()=>{
+  if(!S) return;
+  for(let i=0; i<4; i++){
+    endWeek();
+    if(document.getElementById('modalBg').classList.contains('on')) return; // something needs you
+  }
+  toast('A MONTH PASSES. THE SCENE MOVES ON.');
+};
 el('s1Next').onclick = ()=>{ if(!S.pipe) S.pipe={stage:1, make:null, buzz:null, buzzNote:'', disaster:false}; S.pipe.stage=2; save(); render(); };
 el('collexBtn').onclick = startCollection;
 el('dropBtn').onclick = doDrop;
