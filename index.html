@@ -210,7 +210,7 @@
   <div class="stat" id="vaultStat" style="display:none"><span class="lbl">Vault</span><span class="val" id="stVault" style="color:var(--gold)">$0</span></div>
   <div class="stat"><span class="lbl">Burn</span><span class="val" id="stBurn" style="color:var(--red);font-size:14px">−$0/wk</span></div>
   <div class="stat" id="hypeWrap"><span class="lbl">Attention <span id="stHypeN"></span></span><div id="hypeBar"><div id="hypeFill"></div></div></div>
-  <div class="stat"><span class="lbl">Fans</span><span class="val" id="stFans" style="color:var(--green)">0</span></div>
+  <div class="stat"><span class="lbl">Fans</span><span class="val" id="stFans" style="color:var(--green);font-size:22px;font-weight:700;font-family:'Archivo Black',sans-serif">0</span></div>
   <div class="stat"><span class="lbl">Rep</span><span class="val" id="stRep" style="color:var(--gold)">0★</span></div>
   <div id="rankChip">#—</div>
   <div id="tierChip" style="font-family:'Archivo Black';font-size:12px;border:2px solid var(--gold);color:var(--gold);padding:3px 10px">LOCAL SCENE</div>
@@ -286,6 +286,9 @@
     <div class="tabPane panel" id="tab-mkt">
       <h2>Build attention (uses your week)</h2>
       <div id="mktBtns"></div>
+      <h2 style="margin-top:18px">🚐 Hit the road — pop-up tour</h2>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:8px">Take the brand on the road (1 slot). Move inventory, spike attention, and turn walk-ups into lasting fans. Venues scale with your scene.</div>
+      <div id="tourBtns"></div>
     </div>
 
     <!-- HQ TAB -->
@@ -418,6 +421,16 @@ const PROMO_PITCH = [
 ];
 const VIBES = ['heavy chrome metal','washed grief-core','y2k rot','brutalist florals','thrifted heaven','cyber siesta','post-apoc prep','sunbleached noir','gas station couture','angelic vandalism'];
 
+// The pop-up tour circuit — the streetwear answer to gigging. Venues scale with your scene.
+const TOUR_STOPS = [
+  {id:'flea',    emoji:'🧺', name:'FLEA MARKET BOOTH',      tier:0, cost:250,   scale:1.0},
+  {id:'night',   emoji:'🌃', name:'NIGHT MARKET STALL',     tier:0, cost:700,   scale:1.5},
+  {id:'ware',    emoji:'🔊', name:'WAREHOUSE RAVE POP-UP',  tier:1, cost:2500,  scale:2.4},
+  {id:'expo',    emoji:'🏟️', name:'STREETWEAR EXPO',        tier:2, cost:6500,  scale:3.6},
+  {id:'capital', emoji:'🗼', name:'FASHION CAPITAL POP-UP', tier:3, cost:16000, scale:5.2},
+];
+const FAN_MILESTONES = [100, 250, 500, 1000, 2500, 5000, 10000, 25000];
+
 const UPGRADES = [
   {id:'designer', emoji:'✂️', name:'HIRE A DESIGNER',  cost:15000,  desc:'A real design studio. Demand +12% on everything, forever. Upkeep $250/wk.'},
   {id:'atelier',  emoji:'🏭', name:'IN-HOUSE ATELIER', cost:40000,  desc:'Own the production line. Unit costs −25%, forever. Upkeep $350/wk.'},
@@ -485,7 +498,7 @@ function newGame(label){
     drops:[],                 // archive
     rivals: RIVALS.map((n,i)=>({name:n, hype: clamp(ri(6,70)+ (i<3?15:0),5,90), prev:0})),
     flags:{}, feed:[], ticker:[],
-    stats:{peakHype:startHype, bestRank:11, revenue:0, bestResale:1, dropsCount:0},
+    stats:{peakHype:startHype, bestRank:11, revenue:0, bestResale:1, dropsCount:0, fanMilestone:0},
     prevRank:null,
   };
   S.rivals.forEach(r=>r.prev=r.hype);
@@ -631,6 +644,22 @@ function fanFitLine(){
   if(S.pipe&&S.pipe.make&&S.pipe.make.id==='premium') bits.push('resellers eye the premium make');
   return bits.length? '<br>👥 '+bits.join(' · ') : '';
 }
+// add new fans, weighted toward your established identity (momentum)
+function distributeFans(n){
+  if(!S.fans || n<=0) return;
+  const f=S.fans, tot=f.purist+f.hype+f.reseller+9;
+  f.purist   += n*(f.purist+3)/tot;
+  f.hype     += n*(f.hype+3)/tot;
+  f.reseller += n*(f.reseller+3)/tot;
+  f.purist=clamp(f.purist,0,600); f.hype=clamp(f.hype,0,600); f.reseller=clamp(f.reseller,0,400);
+}
+function checkFanMilestone(){
+  const t = totalFans();
+  const prev = S.stats.fanMilestone||0;
+  let hit = 0;
+  FAN_MILESTONES.forEach(m=>{ if(t>=m && m>prev) hit = m; });
+  if(hit){ S.stats.fanMilestone = hit; sfx('grail'); toast('🎉 '+hit.toLocaleString('en-US')+' FANS'); addTicker(`${S.label} PASSES ${hit.toLocaleString('en-US')} FANS`); }
+}
 
 function estDemand(type, price, q){
   let base = audience()*type.appeal*priceFactor(type,price)*fatigueFactor(type)*trendFactor(type)*(q||1);
@@ -666,6 +695,21 @@ function setCash(target){
   };
   cashAnim = requestAnimationFrame(step);
 }
+let dispFans = null, fansAnim = null;
+function setFans(target){
+  const c = el('stFans');
+  if(dispFans===null || Math.abs(dispFans-target)<1){ dispFans=target; c.textContent=Math.round(target).toLocaleString('en-US'); return; }
+  const from = dispFans, t0 = performance.now(), dur = 600;
+  if(fansAnim) cancelAnimationFrame(fansAnim);
+  if(target>from) c.animate([{transform:'scale(1.35)'},{transform:'scale(1)'}], {duration:400, easing:'ease-out'});
+  const step = (t)=>{
+    const p = Math.min(1,(t-t0)/dur), e = 1-Math.pow(1-p,3);
+    dispFans = from+(target-from)*e;
+    c.textContent = Math.round(dispFans).toLocaleString('en-US');
+    if(p<1) fansAnim = requestAnimationFrame(step); else fansAnim=null;
+  };
+  fansAnim = requestAnimationFrame(step);
+}
 function vaultValue(){
   return S.drops.reduce((a,d)=>a+(d.stash||0)*(d.retail||0)*(d.resaleNow||1), 0);
 }
@@ -682,7 +726,7 @@ function render(){
   if(vv>0) el('stVault').textContent = fmt$(vv);
   el('stHypeN').textContent = Math.round(S.attention);
   el('hypeFill').style.width = clamp(S.attention,0,100)+'%';
-  el('stFans').textContent = totalFans().toLocaleString('en-US');
+  setFans(totalFans());
   el('rankChip').textContent = '#'+myRank()+' HEAT';
   el('stRep').textContent = S.rep+'★';
   el('tierChip').textContent = TIERS[S.tier||0].name + (S.promo==='armed'?' ⚡':'');
@@ -800,7 +844,6 @@ function renderMkt(){
   const M = [
     {id:'seed', n:'Seed to influencers', d:'Mail free pieces to micro-influencers. Might spark, might get ignored.', c:500},
     {id:'guerrilla', n:'Guerrilla campaign', d:'Wheatpaste posters, sticker bombs, cryptic billboards.', c:1500},
-    {id:'popup', n:'Pop-up teaser', d:'One-night pop-up. Line around the block or empty room.', c:4000, unlock:25},
     {id:'hustle', n:'Side hustle', d:'Flip vintage on the side. +$500, but the label goes quiet.', c:0},
   ];
   el('mktBtns').innerHTML='';
@@ -813,6 +856,60 @@ function renderMkt(){
     b.onclick = ()=>doMarketing(m.id, m.c);
     el('mktBtns').appendChild(b);
   });
+  renderTour();
+}
+function renderTour(){
+  const box = el('tourBtns'); if(!box) return;
+  box.innerHTML='';
+  const noTime = (S.slots===undefined?3:S.slots) < 1;
+  TOUR_STOPS.forEach(s=>{
+    const locked = (S.tier||0) < s.tier;
+    const b = document.createElement('button');
+    b.className='actBtn';
+    if(locked){
+      b.innerHTML = `<span><span class="an" style="opacity:.5">${s.emoji} ${s.name}</span><br><span class="ad">Unlocks at ${TIERS[s.tier].name}.</span></span><span class="ac">🔒</span>`;
+      b.disabled = true;
+    } else {
+      b.innerHTML = `<span><span class="an">${s.emoji} ${s.name}</span><br><span class="ad">Sell inventory + big attention + walk-up fans.</span></span><span class="ac">${fmt$(s.cost)}</span>`;
+      b.disabled = S.cash < s.cost || noTime;
+      b.onclick = ()=>doTour(s.id);
+    }
+    box.appendChild(b);
+  });
+}
+function doTour(id){
+  const s = TOUR_STOPS.find(x=>x.id===id);
+  if(!s || S.cash < s.cost) return;
+  if(!spendSlots(1)) return;
+  S.cash -= s.cost;
+  awardCrewXP('plug', 1);
+  const plug = crewSkill('plug');
+  const flop = Math.random() < 0.12;
+  let turnout = (S.attention*0.5 + totalFans()*0.4 + S.rep*6 + plug*8 + 25) * s.scale * rand(0.65,1.5);
+  if(flop) turnout *= 0.3;
+  const attnGain = clamp(Math.round(s.scale*3 + turnout*0.02), 2, 30);
+  S.attention = clamp(S.attention + attnGain, 0, 100);
+  const newFans = Math.max(0, Math.round(turnout*0.11));
+  distributeFans(newFans);
+  // sell booth inventory (dead stock moves great at a live event) + general merch
+  let cash = 0, moved = 0;
+  if(S.stock){ moved = Math.min(S.stock.units, Math.round(turnout/4)); S.stock.units -= moved; cash += Math.round(moved*S.stock.price*0.85); if(S.stock.units<=0) S.stock=null; }
+  const merch = Math.round(turnout * 1.4);
+  cash += merch;
+  S.cash += cash;
+  let repLine = '';
+  if(!flop && turnout > 120 && S.rep<10 && Math.random()<0.3){ S.rep=clamp(S.rep+1,0,10); repLine = ' · <span class="num y">+1 rep</span>'; }
+  sfx(flop?'brick':'sellout');
+  addTicker(flop? `${S.label} POP-UP AT ${s.name} FALLS FLAT` : `${S.label} TAKES OVER ${s.name}`);
+  if(!flop) addPost('', pick(HANDLES), quote(`pulled up to the {L} pop-up, line was INSANE 🔥`, ''));
+  const head = flop? 'DEAD ROOM' : turnout>250? 'PACKED HOUSE' : 'GOOD TURNOUT';
+  const cls = flop? 'l' : 'w';
+  checkFanMilestone();
+  showModal(`${s.emoji} ${s.name} — ${head}`, cls,
+    (flop? 'Barely anyone showed. Rain, bad timing, who knows.' : `The booth was mobbed. ${moved? moved+' pieces of inventory gone, ':''}new faces everywhere.`) +
+    `<br><br><span class="num g">+${fmt$(cash)}</span> takings · <span class="num g">+${attnGain} attention</span> · <span class="num g">+${newFans} fans</span>${repLine}`,
+    [{label:'CONTINUE', run:maybeEnd}]);
+  save(); render();
 }
 function renderHQ(){
   el('upgList').innerHTML='';
@@ -1021,6 +1118,9 @@ function doDrop(){
   const fanNote = updateFans({soldOut: cls==='w', cls, q, resale, viral, buzz:(P.buzz?P.buzz.mult:1), onBrand, trendHit: trendFactor(type)>1});
   recordSignature(dvibe);
   if(fanNote) html += `<br>👥 ${fanNote}`;
+  // the crew gains experience from every drop
+  CREW_ROLES.forEach(r=>{ if(S.crew[r.id]) awardCrewXP(r.id, cls==='w'?2:1); });
+  checkFanMilestone();
   S.drops.push({name:fullName, week:S.week, qty, sold, resale, resaleNow:resale, retail:price, stash, prevResale:resale});
   S.stats.dropsCount++;
   S.stats.revenue += sold*price;
@@ -1309,6 +1409,20 @@ function renderCollex(){
 }
 
 /* ================= CREW ================= */
+function awardCrewXP(role, n){
+  const m = S.crew && S.crew[role];
+  if(!m || m.skill>=5) return;
+  m.xp = (m.xp||0) + n;
+  const need = m.skill*4;   // xp to next level
+  if(m.xp >= need){
+    m.xp -= need;
+    m.skill++;
+    bumpMood(m, 10);
+    toast('⭐ '+m.name+' LEVELED UP → '+'★'.repeat(m.skill));
+    addPost('sys', null, `${m.name} leveled up to ${'★'.repeat(m.skill)} — sharper work ahead.`);
+    sfx('cash');
+  }
+}
 function renderCrew(){
   el('crewList').innerHTML='';
   CREW_ROLES.forEach(r=>{
@@ -1319,8 +1433,9 @@ function renderCrew(){
       const tr = TRAITS.find(t=>t.id===m.trait) || TRAITS[4];
       const mood = m.mood===undefined?70:Math.round(m.mood);
       const moodCol = mood>=60?'var(--green)':mood>=30?'var(--gold)':'var(--red)';
+      const xpStr = m.skill>=5? '<span style="color:var(--gold)">MAX ★★★★★</span>' : `XP ${m.xp||0}/${m.skill*4} to ★${m.skill+1}`;
       b.innerHTML = `<span><span class="an">${r.emoji} ${m.name} — ${r.title} ${'★'.repeat(m.skill)}${'☆'.repeat(5-m.skill)} · <span style="color:var(--gold)">${tr.name}</span></span><br>
-        <span class="ad">${tr.desc} Morale: <b style="color:${moodCol}">${mood}%</b> — low morale means weak output and drama.</span></span>
+        <span class="ad">${tr.desc} Morale: <b style="color:${moodCol}">${mood}%</b> · ${xpStr}</span></span>
         <span class="ac">${fmt$(m.wage)}/WK</span>`;
       b.onclick = ()=>showModal(m.name+' — '+r.title, 'e',
         `${tr.name}. Morale <b style="color:${moodCol}">${mood}%</b>. Wage ${fmt$(m.wage)}/wk.`, [
@@ -1339,7 +1454,7 @@ function hireModal(r){
     const skill = clamp(ri(1,2) + ri(0, Math.floor(S.attention/25)), 1, 5);
     const trait = pick(TRAITS).id;
     const wage = Math.round(r.wageBase*(0.6 + skill*0.45) * (trait==='flaky'?0.7:1));
-    return {name:pick(CREW_NAMES), skill, wage, trait, mood:70};
+    return {name:pick(CREW_NAMES), skill, wage, trait, mood:70, xp:0};
   });
   showModal('CANDIDATES — '+r.title, 'e',
     `Word is out that ${S.label} is hiring. Better talent shows up when you're hotter.`,
@@ -1375,6 +1490,7 @@ function endWeek(){
     f.hype     += conv*(f.hype+3)/tot;
     f.reseller += conv*(f.reseller+3)/tot;
     f.purist=clamp(f.purist,0,600); f.hype=clamp(f.hype,0,600); f.reseller=clamp(f.reseller,0,400);
+    checkFanMilestone();
   }
   // flagship store moves product every week
   if(S.upgrades.flagship){
@@ -1800,7 +1916,7 @@ function load(){
     s.fans = s.fans || {purist:10, hype:6, reseller:2};
     s.vibeHistory = s.vibeHistory || [];
     if(s.signature===undefined) s.signature = null;
-    CREW_ROLES.forEach(r=>{ const m=s.crew[r.id]; if(m){ if(m.trait===undefined) m.trait='steady'; if(m.mood===undefined) m.mood=70; } });
+    CREW_ROLES.forEach(r=>{ const m=s.crew[r.id]; if(m){ if(m.trait===undefined) m.trait='steady'; if(m.mood===undefined) m.mood=70; if(m.xp===undefined) m.xp=0; } });
     if(!s.trendHot){
       s.trendHot = TYPES[1].id;
       s.trendCold = TYPES[3].id;
