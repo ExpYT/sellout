@@ -1,5 +1,5 @@
 /* ============================================================
-   STREETWEAR EMPIRE — market.js
+   SELLOUT — market.js
    Customer segments, demand simulation, the resale market,
    and AI competitor brands.
    ============================================================ */

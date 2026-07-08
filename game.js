@@ -1,5 +1,5 @@
 /* ============================================================
-   STREETWEAR EMPIRE — game.js
+   SELLOUT — game.js
    Core state, shared constants, helpers, and the weekly loop.
    Loaded first: everything else hangs off the global G object.
    ============================================================ */
@@ -87,6 +87,14 @@ const PRESTIGE_TIERS = [
 ];
 
 const HANDLES = ['@dripcheck','@fitpicdaily','@sole.archive','@copthis','@modline','@waitlisted','@offrack','@stitchwatch','@carted','@lowkeyheat','@qualitycrit','@pressplayfits'];
+
+/* Name generators — used whenever the player leaves a name blank. */
+const BRAND_A = ['DEAD','SOUR','PALE','LOUD','GUTTER','HALF','WET','LAST','FAKE','NORTH','GREY','HOLLOW'];
+const BRAND_B = ['STOCK','THEORY','MERCY','ARCHIVE','SAINTS','MARKET','CANVAS','WORSHIP','STATIC','MILE','CLUB','YOUTH'];
+const COL_A   = ['CHROME','MIDNIGHT','ACID','GHOST','VELVET','STATIC','BURNT','NEON','BROKEN','HOLY','FERAL','GLASS'];
+const COL_B   = ['TEARS','RIOT','BLOOM','YOUTH','MIRAGE','SERPENT','ORCHID','VANDAL','HALO','ANTHEM','CURFEW','RAPTURE'];
+function randBrandName(){ return pick(BRAND_A)+' '+pick(BRAND_B); }
+function randCollectionName(){ return pick(COL_A)+' '+pick(COL_B); }
 
 /* Brand DNA — the founding identity chosen at creation. Gentle nudges,
    never locks: behaviour can evolve the brand anywhere from here.     */

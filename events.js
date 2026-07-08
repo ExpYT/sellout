@@ -1,5 +1,5 @@
 /* ============================================================
-   STREETWEAR EMPIRE — events.js
+   SELLOUT — events.js
    Random weekly events. Every event is a decision, and most
    trade cash against community trust or momentum.
    ============================================================ */

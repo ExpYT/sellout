@@ -1,5 +1,5 @@
 /* ============================================================
-   STREETWEAR EMPIRE — drops.js
+   SELLOUT — drops.js
    Collection design, quality scoring, marketing channels,
    drop configuration and the launch sequence.
    ============================================================ */
@@ -38,7 +38,7 @@ function designQualityBase(d){
 function finalizeDesign(){
   const d = G.design;
   if(!d) return;
-  if(!d.name.trim()){ toast('Give the collection a name first'); return; }
+  if(!d.name.trim()){ d.name = randCollectionName(); toast('Unnamed — the studio christened it '+d.name); }
   const mat = MATERIALS.find(m=>m.id===d.material);
   if(mat.research && !G.research[mat.research]){ toast('That material needs research'); return; }
 

@@ -1,5 +1,5 @@
 /* ============================================================
-   STREETWEAR EMPIRE — employees.js
+   SELLOUT — employees.js
    Five roles, candidates, wages, happiness.
    empBonus(role) → 0..1 scaled effect used across systems.
    ============================================================ */

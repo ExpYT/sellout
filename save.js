@@ -1,11 +1,18 @@
 /* ============================================================
-   STREETWEAR EMPIRE — save.js
+   SELLOUT — save.js
    localStorage persistence with light migration guards.
    ============================================================ */
 
 "use strict";
 
-const SAVE_KEY = 'streetwear_empire_v1';
+const SAVE_KEY = 'sellout_v1';
+// one-time migration from the pre-rebrand save key
+try{
+  if(!localStorage.getItem(SAVE_KEY) && localStorage.getItem('streetwear_empire_v1')){
+    localStorage.setItem(SAVE_KEY, localStorage.getItem('streetwear_empire_v1'));
+    localStorage.removeItem('streetwear_empire_v1');
+  }
+}catch(e){}
 
 function saveGame(){
   try{ localStorage.setItem(SAVE_KEY, JSON.stringify(G)); }catch(e){}

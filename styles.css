@@ -1,31 +1,32 @@
 /* ============================================================
-   STREETWEAR EMPIRE — styles.css
-   Dark, premium, business-software aesthetic.
+   SELLOUT — styles.css
+   Black-and-red streetwear aesthetic: sharp corners, heavy
+   display type, dashboard layout underneath.
    ============================================================ */
 
 :root{
-  --bg:        #0d1017;   /* app background */
-  --panel:     #141926;   /* card background */
-  --panel2:    #1a2133;   /* inset / input background */
-  --line:      #232c42;   /* borders */
-  --txt:       #e8ecf4;   /* primary text */
-  --dim:       #8b94ab;   /* secondary text */
-  --accent:    #6c7bff;   /* indigo — primary actions */
-  --green:     #34d399;   /* positive */
-  --red:       #f87171;   /* negative */
-  --gold:      #fbbf24;   /* prestige / highlights */
-  --cyan:      #22d3ee;   /* info */
-  --radius:    10px;
+  --bg:        #0b0b0b;   /* app background */
+  --panel:     #141414;   /* card background */
+  --panel2:    #1b1b1b;   /* inset / input background */
+  --line:      #2a2a2a;   /* borders */
+  --txt:       #f2f2f2;   /* primary text */
+  --dim:       #9a9a9a;   /* secondary text */
+  --accent:    #ff2b2b;   /* signature red — primary actions */
+  --green:     #57ff9a;   /* positive */
+  --red:       #ff6b6b;   /* negative (softer than accent red) */
+  --gold:      #ffd24a;   /* prestige / highlights */
+  --cyan:      #ffd24a;   /* info — folded into gold for the punk palette */
+  --radius:    0px;
 }
 
 *{ box-sizing:border-box; margin:0; padding:0; }
 html,body{ height:100%; }
 body{
   background:var(--bg); color:var(--txt);
-  font-family:'Inter','Segoe UI',system-ui,sans-serif;
+  font-family:'Space Grotesk','Segoe UI',system-ui,sans-serif;
   font-size:14px; line-height:1.5;
 }
-h1,h2,h3{ font-weight:700; letter-spacing:-.01em; }
+h1,h2,h3{ font-family:'Archivo Black',Impact,sans-serif; font-weight:400; letter-spacing:.02em; text-transform:uppercase; }
 button{ font-family:inherit; cursor:pointer; transition:all .15s ease; }
 button:active{ transform:scale(.98); }
 input,select{ font-family:inherit; }
@@ -244,3 +245,16 @@ canvas.chart{ width:100%; height:150px; display:block; }
   #main{ padding:14px 12px 70px; }
   #nav{ padding:6px 10px 0; } #nav button{ padding:9px 10px; font-size:12px; }
 }
+
+/* ============================================================
+   SELLOUT rebrand overrides — sharp corners + display type.
+   Kept as one block so the dashboard skeleton stays untouched.
+   ============================================================ */
+button, input, select, .card, .row-item, .opt, .mini-btn, .btn,
+.meter, .meter > div, #modal, .toast, #launchBarWrap, #launchBar,
+#startName, .field input{ border-radius:0 !important; }
+#brandName, .big-stat, .k-value, #launchName, #launchStamp, #launchSold,
+#advanceBtn, .btn, #modalTitle{ font-family:'Archivo Black',Impact,sans-serif; font-weight:400; }
+#brandName, #launchName, #modalTitle{ text-transform:uppercase; }
+#brandName{ background:var(--accent); color:#fff; padding:2px 10px; }
+#brandName span{ color:#fff; }

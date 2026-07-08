@@ -1,5 +1,5 @@
 /* ============================================================
-   STREETWEAR EMPIRE — research.js
+   SELLOUT — research.js
    Simple linear research: pay up front, wait N weeks,
    permanent unlock. One active project at a time.
    ============================================================ */

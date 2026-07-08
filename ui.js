@@ -1,5 +1,5 @@
 /* ============================================================
-   STREETWEAR EMPIRE — ui.js
+   SELLOUT — ui.js
    All rendering, navigation, modals, toasts, charts, and boot.
    Loaded last; calls into every other module.
    ============================================================ */
@@ -465,7 +465,7 @@ function setupCanvas(id){
 
 function drawLineChart(id, data){
   const {x,w,h} = setupCanvas(id);
-  if(!data || data.length<2){ x.fillStyle='#8b94ab'; x.font='12px Inter'; x.fillText('More data next week…', 10, h/2); return; }
+  if(!data || data.length<2){ x.fillStyle='#9a9a9a'; x.font='12px Space Grotesk'; x.fillText('More data next week…', 10, h/2); return; }
   const min = Math.min(...data), max = Math.max(...data), span = Math.max(1, max-min);
   const px = i => 6 + (w-12)*i/(data.length-1);
   const py = v => h-14 - (h-26)*(v-min)/span;
@@ -474,32 +474,32 @@ function drawLineChart(id, data){
   data.forEach((v,i)=>x.lineTo(px(i), py(v)));
   x.lineTo(px(data.length-1), h-8); x.closePath();
   const grad = x.createLinearGradient(0,0,0,h);
-  grad.addColorStop(0,'rgba(108,123,255,.35)'); grad.addColorStop(1,'rgba(108,123,255,0)');
+  grad.addColorStop(0,'rgba(255,43,43,.35)'); grad.addColorStop(1,'rgba(255,43,43,0)');
   x.fillStyle = grad; x.fill();
   // line
   x.beginPath();
   data.forEach((v,i)=> i? x.lineTo(px(i),py(v)) : x.moveTo(px(i),py(v)));
-  x.strokeStyle = '#6c7bff'; x.lineWidth = 2; x.stroke();
+  x.strokeStyle = '#ff2b2b'; x.lineWidth = 2; x.stroke();
   // labels
-  x.fillStyle = '#8b94ab'; x.font = '11px Inter';
+  x.fillStyle = '#9a9a9a'; x.font = '11px Space Grotesk';
   x.fillText(fmtN(max), 6, 12);
   x.fillText(fmtN(data[data.length-1])+' now', w-84, py(data[data.length-1])-6);
 }
 
 function drawBarChart(id, items){
   const {x,w,h} = setupCanvas(id);
-  if(!items || !items.length){ x.fillStyle='#8b94ab'; x.font='12px Inter'; x.fillText('Launch a drop to see revenue here.', 10, h/2); return; }
+  if(!items || !items.length){ x.fillStyle='#9a9a9a'; x.font='12px Space Grotesk'; x.fillText('Launch a drop to see revenue here.', 10, h/2); return; }
   const max = Math.max(...items.map(i=>i.v), 1);
   const bw = Math.min(54, (w-20)/items.length - 8);
   items.forEach((it,i)=>{
     const bx = 10 + i*(bw+8);
     const bh = (h-34)*it.v/max;
-    x.fillStyle = '#22d3ee';
+    x.fillStyle = '#ffd24a';
     x.fillRect(bx, h-20-bh, bw, bh);
-    x.fillStyle = '#8b94ab'; x.font='9px Inter';
+    x.fillStyle = '#9a9a9a'; x.font='9px Space Grotesk';
     x.fillText(it.name.slice(0,8), bx, h-8);
   });
-  x.fillStyle='#8b94ab'; x.font='11px Inter';
+  x.fillStyle='#9a9a9a'; x.font='11px Space Grotesk';
   x.fillText(fmt$(max), 10, 12);
 }
 
@@ -566,7 +566,7 @@ $id('importBtn').onclick = ()=>$id('importFile').click();
 $id('importFile').onchange = e=>{ if(e.target.files[0]) importSave(e.target.files[0]); };
 
 $id('startBtn').onclick = ()=>{
-  const name = $id('startName').value.trim().toUpperCase() || 'NO LABEL';
+  const name = $id('startName').value.trim().toUpperCase() || randBrandName();
   newGame(name, chosenDiff, chosenDna);
   saveGame();
   startUI();
