@@ -37,6 +37,12 @@ function loadGame(){
     s.milestones   = s.milestones   || {};
     s.history.weekly = s.history.weekly || [];
     if(s.stats.lifetimeProfit===undefined) s.stats.lifetimeProfit = 0;
+    // v1.6 migrations — community & culture
+    s.lore = s.lore || [];
+    s.pollWish = s.pollWish || null;
+    s.lastCommunity = s.lastCommunity || 0;
+    s.communityDoneWk = s.communityDoneWk || 0;
+    s.history.loyalty = s.history.loyalty || [];
     // v1.5 migrations — the fashion calendar
     s.compCal = s.compCal || [];
     s.schedule = s.schedule || null;

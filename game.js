@@ -404,6 +404,9 @@ function newGame(brand, difficulty, dnaId){
     botStreak: 0,        // consecutive drops lost to resellers
     milestones: {},      // milestone id -> week earned
     slots: 3,            // weekly time slots: design=1, marketing=1, drop=2
+    lore: [],            // v1.6 community memory
+    pollWish: null,      // what the community asked for
+    lastCommunity: 0, communityDoneWk: 0,
     compCal: [],         // v1.5 competitor release calendar
     schedule: null,      // your scheduled launch
     annualAwards: {},    // year -> award results
@@ -441,9 +444,16 @@ function weeklyExpensesEstimate(){
 }
 
 /* ---------------- feed ---------------- */
-function feedPost(cls, handle, text){
-  G.feed.unshift({cls, handle, text, week:G.week});
+function feedPost(cls, handle, text, plat){
+  G.feed.unshift({cls, handle, text, week:G.week, plat});
   if(G.feed.length>60) G.feed.pop();
+}
+
+/* Community lore — moments the culture never forgets. */
+function addLore(line){
+  G.lore = G.lore||[];
+  G.lore.push({week:G.week, line});
+  if(G.lore.length>12) G.lore.shift();
 }
 
 /* ---------------- the weekly loop ---------------- */
@@ -529,6 +539,11 @@ function advanceWeek(){
   // 10b. The fashion calendar turns
   tickCompCal();
   maybeRumour();
+  communityTick();
+  // loyalty history for the community analytics chart
+  G.history.loyalty = G.history.loyalty||[];
+  G.history.loyalty.push(Math.round(G.loyalty));
+  if(G.history.loyalty.length>52) G.history.loyalty.shift();
   let bigMoment = false;
   const ce = currentCalEvent();
   if(ce){

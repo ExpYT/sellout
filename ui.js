@@ -46,6 +46,7 @@ function renderAll(){
   renderStudio();
   renderDrop();
   renderMarketing();
+  renderCommunity();
   renderTrends();
   renderCalendar();
   renderTeam();
@@ -196,11 +197,7 @@ function renderDashboard(){
   };
 
   // feed — customers, press outlets, and system notes each read differently
-  $id('feedList').innerHTML = G.feed.map(p=>
-    p.cls==='sys'? `<div class="post sys">${p.text}</div>`
-    : p.cls==='press'? `<div class="post press"><span class="handle" style="color:var(--gold)">${p.handle}</span> <span style="font-style:italic">${p.text}</span></div>`
-    : `<div class="post ${p.cls}"><span class="handle">${p.handle}</span> ${p.text}</div>`
-  ).join('') || '<div class="post sys">Quiet for now. Drop something.</div>';
+  $id('feedList').innerHTML = feedHTML();
 
   drawLineChart('chartFollowers', G.history.followers);
   drawBarChart('chartRevenue', G.history.revenue);
@@ -546,6 +543,83 @@ function renderTrends(){
   $id('evolutionBox').innerHTML = (G.evolution||[]).slice().reverse().map(e=>
     `<div class="row-item" style="padding:7px 12px"><div class="ri-main"><div class="ri-title" style="font-size:12.5px">${e.text}</div></div><div class="ri-side" style="color:var(--dim);font-weight:400">wk ${e.week}</div></div>`).join('')
     || '<div class="sub-stat">Your story starts with the first drop.</div>';
+}
+
+/* ---------------- community hub (v1.6) ---------------- */
+function feedHTML(){
+  return G.feed.map(p=>{
+    const plat = p.plat? `<span style="color:var(--accent);font-size:10px;font-weight:700">[${p.plat}]</span> ` : '';
+    return p.cls==='sys'? `<div class="post sys">${p.text}</div>`
+      : p.cls==='press'? `<div class="post press">${plat}<span class="handle" style="color:var(--gold)">${p.handle}</span> <span style="font-style:italic">${p.text}</span></div>`
+      : `<div class="post ${p.cls}">${plat}<span class="handle">${p.handle}</span> ${p.text}</div>`;
+  }).join('') || '<div class="post sys">Quiet for now. Drop something.</div>';
+}
+
+function renderCommunity(){
+  if(!$id('cLoyal')) return;
+  const loyalFans = Math.round(G.followers * (G.loyalty/100) * 0.25);
+  $id('cLoyal').textContent = fmtN(loyalFans);
+  const moodScore = G.loyalty*0.4 + G.satisfaction*0.35 + G.hype*0.25;
+  const [mood, moodCol] = moodScore>=70? ['Electric ⚡','var(--gold)'] : moodScore>=55? ['Warm','var(--green)']
+    : moodScore>=40? ['Content','var(--txt)'] : moodScore>=25? ['Restless','var(--red)'] : ['Hostile','var(--red)'];
+  $id('cMood').textContent = mood; $id('cMood').style.color = moodCol;
+  $id('cMoodSub').textContent = `loyalty + satisfaction + hype, blended`;
+  $id('cTrust').textContent = Math.round(G.loyalty)+'/100';
+
+  // fan mix — who your followers actually are, derived from how you play
+  const D = G.drops, avg = (f,def)=> D.length? D.reduce((a,d)=>a+f(d),0)/D.length : def;
+  let mix = {
+    'Day One Loyalists': 10 + G.loyalty*0.35,
+    'Collectors':        5 + G.prestige*0.25 + D.filter(d=>d.pieces<=2).length,
+    'Trend Chasers':     15 + (brandPersonality().includes('Trend Chaser')? 12:0),
+    'Casual Customers':  30 - G.prestige*0.1,
+    'Luxury Buyers':     3 + (avg(d=>d.priceRatio||1,1)>1.25? 10:2),
+    'Resellers & Scalpers': 4 + avg(d=>d.resellerShare||0,0)*40,
+  };
+  const tot = Object.values(mix).reduce((a,b)=>a+b,0);
+  $id('fanMix').innerHTML = Object.entries(mix).map(([n,v])=>{
+    const pct = Math.round(v/tot*100);
+    return `<div class="meter-row"><div class="m-head"><span>${n}</span><b>${fmtN(Math.round(G.followers*pct/100))} · ${pct}%</b></div>
+      <div class="meter ${n.includes('Loyal')?'green':n.includes('Resell')?'red':''}"><div style="width:${pct}%"></div></div></div>`;
+  }).join('');
+
+  // reputation traits — computed from real behaviour, not stored
+  const traits = [
+    ['Authenticity', clamp(G.loyalty*0.5 + G.reputation*0.5 - (G.botStreak||0)*10, 0, 100), 'kept real by protecting fans from bots'],
+    ['Creativity',   clamp(avg(d=>(d.originality||5),5)*10, 0, 100), 'originality of your recent work'],
+    ['Consistency',  clamp(avg(d=>(d.synergy||60),60), 0, 100), 'how coherent your collections are'],
+    ['Exclusivity',  clamp((D.filter(d=>d.soldOut).length/Math.max(1,D.length))*70 + (avg(d=>d.qty,500)<400?30:5), 0, 100), 'sellouts and restraint'],
+    ['Quality',      clamp(avg(d=>d.quality,5)*10, 0, 100), 'what the garments actually feel like'],
+    ['Customer Service', clamp(G.satisfaction, 0, 100), 'satisfaction with the whole experience'],
+  ];
+  $id('repTraits').innerHTML = traits.map(([n,v,tip])=>`
+    <div class="meter-row" title="${tip}"><div class="m-head"><span>${n}</span><b>${Math.round(v)}</b></div>
+      <div class="meter ${v>=65?'green':v<35?'red':''}"><div style="width:${v}%"></div></div></div>`).join('');
+
+  // engagement actions
+  const done = G.communityDoneWk===G.week;
+  $id('communityActions').innerHTML =
+    (G.pollWish? `<div class="row-item" style="border-color:var(--gold)"><div class="ri-main"><div class="ri-title" style="font-size:12.5px;color:var(--gold)">📊 They voted: ${PALETTES.find(p=>p.id===G.pollWish.palette).name} ${PRODUCTS.find(p=>p.id===G.pollWish.product).name}s</div>
+      <div class="ri-sub">Deliver within ${6-(G.week-G.pollWish.week)} wks for +7 loyalty — or protect your vision.</div></div></div>`:'') +
+    COMMUNITY_ACTIONS.map(a=>`
+    <div class="row-item"><div class="ri-main"><div class="ri-title" style="font-size:12.5px">${a.name}</div><div class="ri-sub">${a.desc}</div></div>
+      <button class="mini-btn" data-cact="${a.id}" ${done||G.cash<a.cost||slots()<1?'disabled':''}>${done?'✓ this week':(a.cost?fmt$(a.cost):'Free')}</button></div>`).join('');
+  document.querySelectorAll('[data-cact]').forEach(b=>{ b.onclick = ()=>doCommunityAction(b.dataset.cact); });
+
+  // analytics
+  const byBuzz = D.filter(d=>d.buzz).sort((a,b)=>(b.buzz||0)-(a.buzz||0))[0];
+  const loved = D.filter(d=>d.review).sort((a,b)=>b.review.overall-a.review.overall)[0];
+  const contro = D.filter(d=>d.review&&d.soldOut).sort((a,b)=>a.review.overall-b.review.overall)[0];
+  const row = (l,v)=> v? `<div class="row-item" style="padding:7px 12px"><div class="ri-main"><div class="ri-sub">${l}</div><div class="ri-title" style="font-size:12px">${v}</div></div></div>`:'';
+  $id('communityStats').innerHTML =
+    row('Most discussed', byBuzz && `"${byBuzz.name}" — ${byBuzz.buzz} threads`) +
+    row('Most loved', loved && `"${loved.name}" — ${loved.review.overall}/100`) +
+    row('Most controversial', contro && contro.review.overall<60? `"${contro.name}" — sold out at ${contro.review.overall}/100. The community argues.`:null) +
+    row('Community memory', (G.lore||[]).length? (G.lore[G.lore.length-1].line):null) ||
+    '<div class="sub-stat">The community writes its history one drop at a time.</div>';
+  drawLineChart('chartLoyalty', (G.history.loyalty&&G.history.loyalty.length>1)? G.history.loyalty:null);
+
+  $id('communityFeed').innerHTML = feedHTML();
 }
 
 /* ---------------- the fashion calendar (v1.5) ---------------- */

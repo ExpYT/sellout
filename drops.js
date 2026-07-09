@@ -341,6 +341,23 @@ function launchDrop(){
   if((sim.factors||[]).some(f=>f[0]==='TRENDSETTER')) tags.push('Trendsetter');
   if(col.planned) sim.factors.push(['Planned rollout', 'weeks of scheduled teasers built real anticipation', 'good']);
 
+  // v1.6: did you deliver what the community voted for?
+  if(G.pollWish && G.week - G.pollWish.week <= 6){
+    if(col.product===G.pollWish.product && col.palette===G.pollWish.palette){
+      G.loyalty = clamp(G.loyalty+7, 0, 100);
+      sim.factors.push(['You listened', 'this is exactly what the community voted for — trust deepens', 'good']);
+      feedPost('hot', pick(HANDLES), `${G.brand} actually made the thing we voted for. WE designed this. community W`, 'Threadline');
+      G.pollWish = null;
+    }
+  } else G.pollWish = null;
+
+  // v1.6: moments the community will retell for years
+  if(review.overall>=90) addLore(`"remember the legendary week ${G.week} ${col.productObj.name.toLowerCase()}? '${col.name}' still undefeated"`);
+  if(!sim.soldOut && sim.sold/qty<0.4 && qty>=500) addLore(`"we don't talk about the '${col.name}' overproduction of week ${G.week}"`);
+  if(col.fw && review.overall<50) addLore(`"the failed week ${G.week} Fashion Week show still hurts to think about"`);
+  if(col.fw && review.overall>=80) addLore(`"the '${col.name}' runway moment at week ${G.week}? historic. i was refreshing the livestream"`);
+  if(tags.includes('Trendsetter')) addLore(`"'${col.name}' didn't follow the wave — it WAS the wave. week ${G.week}, never forget"`);
+
   // which crowd carried the drop, which one shrugged (loyal core excluded)
   const segEntries = Object.entries(sim.perSegment).filter(([k])=>k!=='_loyal');
   const segNames = {collector:'Collectors', street:'Streetwear Fans', casual:'Casual Buyers', enthusiast:'Fashion Enthusiasts', luxury:'Luxury Buyers'};

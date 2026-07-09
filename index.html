@@ -51,6 +51,7 @@
   <button data-page="studio">Design Studio</button>
   <button data-page="drop">Drop <span class="badge" id="dropBadge" style="display:none">●</span></button>
   <button data-page="marketing">Marketing</button>
+  <button data-page="community">Community</button>
   <button data-page="trends">Trends</button>
   <button data-page="calendar">Calendar</button>
   <button data-page="team">Team</button>
@@ -181,6 +182,38 @@
         <h3>Hype & Reach</h3>
         <div id="mktStats"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ========== COMMUNITY ========== -->
+  <div class="page" id="page-community">
+    <div class="grid grid-3" style="margin-bottom:16px">
+      <div class="card"><h3>Loyal Fans</h3><div class="big-stat" id="cLoyal" style="color:var(--green)">0</div><div class="sub-stat">they buy every drop and defend the name</div></div>
+      <div class="card"><h3>Community Mood</h3><div class="big-stat" id="cMood">—</div><div class="sub-stat" id="cMoodSub"></div></div>
+      <div class="card"><h3>Brand Trust</h3><div class="big-stat" id="cTrust">0</div><div class="sub-stat">loyalty — the metric that outlasts hype</div></div>
+    </div>
+    <div class="grid grid-2" style="margin-bottom:16px">
+      <div class="card">
+        <h3>Who Your Followers Are</h3>
+        <div id="fanMix"></div>
+      </div>
+      <div class="card">
+        <h3>What They Think Of You</h3>
+        <div id="repTraits"></div>
+      </div>
+      <div class="card">
+        <h3>Engage the Community <span style="color:var(--dim);font-weight:400">· 1 slot · once a week</span></h3>
+        <div id="communityActions"></div>
+      </div>
+      <div class="card">
+        <h3>Community Analytics</h3>
+        <div id="communityStats"></div>
+        <canvas class="chart" id="chartLoyalty" style="margin-top:8px"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h3>The Feed — what the culture is saying</h3>
+      <div id="communityFeed" style="max-height:400px;overflow-y:auto"></div>
     </div>
   </div>
 
