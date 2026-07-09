@@ -98,7 +98,58 @@ function trendBonusFor(col){
   if(s.spend!==1){ mult *= s.spend; factors.push([s.name+' spending mood', s.spend-1, null]); }
   const f = productFatigue(col);
   if(f>0.03){ mult *= (1-f); factors.push(['Product fatigue — too similar to recent drops', -f, null]); }
-  return {mult: clamp(mult, 0.35, 2.1), factors, fatigue:f};
+  // v1.5: the calendar bends the market
+  const ce = currentCalEvent();
+  if(ce){
+    if(ce.type==='spend'){ mult *= 1.35; factors.push(['Black Friday — everyone is buying', 0.35, null]); }
+    else if(ce.type==='conv'){ mult *= 1.15; factors.push(['Streetwear Convention crowd in town', 0.15, null]); }
+    else if(ce.type==='fashionweek'){ const fw = col.fw; mult *= fw? 1.2:0.94; factors.push(fw? ['Fashion Week spotlight', 0.2, null] : ['Fashion Week — attention is on the runways, not your webshop', -0.06, null]); }
+  }
+  if((G.compCal||[]).some(c=>c.week===G.week)){ mult *= 0.92; factors.push(['Crowded week — a rival is releasing too', -0.08, null]); }
+  return {mult: clamp(mult, 0.35, 2.3), factors, fatigue:f};
+}
+
+/* ---------- competitor calendar & rumours (v1.5) ---------- */
+function tickCompCal(){
+  G.compCal = (G.compCal||[]).filter(c=>{
+    if(c.week>G.week) return true;
+    // release day arrives (PAPER CROWN sometimes bottles it)
+    if(c.name==='PAPER CROWN' && Math.random()<0.25){
+      feedPost('press','DROPFEED', `PAPER CROWN delayed its planned release. Again. The rumours were true.`);
+      return false;
+    }
+    const comp = G.competitors.find(x=>x.name===c.name);
+    if(comp){ feedPost('press','DROPFEED', `${c.name} released as scheduled — ${personaOf(comp).style.split('·')[0].trim()} energy all over the feed.`); comp.followers += ri(200,900); }
+    return false;
+  });
+  // brands pencil in future releases (VOID never shows at Fashion Week)
+  G.competitors.forEach(comp=>{
+    if(G.compCal.some(c=>c.name===comp.name)) return;
+    if(Math.random()<0.25){
+      let w = G.week + ri(2,8);
+      if(comp.name==='VOID') while(calEventAt(w) && calEventAt(w).type==='fashionweek') w++;
+      G.compCal.push({week:w, name:comp.name});
+    }
+  });
+}
+
+function maybeRumour(){
+  if(Math.random()>0.15) return;
+  const c = pick(G.competitors);
+  const truth = Math.random();   // <0.4 true, <0.7 partial, else false
+  const line = pick([
+    `${c.name} preparing something huge, sources say.`,
+    `${c.name} reportedly changing creative direction.`,
+    `${c.name} searching for new manufacturing partners.`,
+    `${c.name} rumoured to be planning a surprise release.`,
+  ]);
+  feedPost('press','RUMOR MILL', line+' Unconfirmed.');
+  if(truth<0.4){
+    // true: it materialises on the calendar
+    if(!G.compCal.some(x=>x.name===c.name)) G.compCal.push({week:G.week+ri(2,4), name:c.name});
+  } else if(truth<0.7){
+    c.followers += ri(50,300);   // partially true: just buzz
+  }
 }
 
 /* Fatigue: how much does this design repeat the last few drops? */

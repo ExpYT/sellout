@@ -127,6 +127,48 @@ function buildReadyDrop(){
   };
 }
 
+/* ---------- launch scheduling (v1.5) ----------
+   Lock a collection to a future week; teasers run automatically
+   ($200/wk, +3 hype/wk) and long lead times earn a rollout bonus. */
+function scheduleLaunch(weeksAhead){
+  const col = G.readyDrop;
+  if(!col || G.schedule) return;
+  G.schedule = {week:G.week+weeksAhead, colSel:(G.colSel||[]).slice(), colName:col.name,
+                qty:col.qty, price:col.price, limit:col.limit, setWk:G.week};
+  G.colSel = []; G.colName = ''; G.colRevealed = false;
+  G.hype = clamp(G.hype+4, 0, 100);
+  feedPost('press','DROPFEED', `${G.brand} announces "${G.schedule.colName}" — dropping in ${weeksAhead} weeks. Mark your calendars.`);
+  toast('🗓 Launch scheduled — teaser campaign runs at $200/wk', 'gold');
+  saveGame(); renderAll();
+}
+function cancelSchedule(){
+  if(!G.schedule) return;
+  G.colSel = G.schedule.colSel; G.colName = G.schedule.colName;
+  G.schedule = null;
+  toast('Schedule cancelled — the pieces are back on the table');
+  saveGame(); renderAll();
+}
+function executeSchedule(){
+  const sc = G.schedule;
+  G.colSel = sc.colSel; G.colName = sc.colName;
+  buildReadyDrop();
+  const col = G.readyDrop;
+  if(!col){ G.schedule = null; toast('Scheduled launch cancelled — its pieces were gone'); return false; }
+  col.qty = sc.qty; col.price = sc.price; col.limit = sc.limit;
+  col.planned = (sc.week - sc.setWk) >= 3;
+  col.fwDecided = true;
+  col.fw = !!(currentCalEvent() && currentCalEvent().type==='fashionweek' && G.prestige>=15 && G.cash > col.unitCost*col.qty + 4000);
+  const need = Math.round(col.unitCost*col.qty*(G.eventMods.nextDropCost||1)) + (col.fw?2500:0);
+  if(G.cash < need || col.qty > productionCap()){
+    G.schedule.week = G.week+1;
+    toast('⏳ Scheduled launch postponed a week — cash or capacity short');
+    return false;
+  }
+  G.schedule = null;
+  launchDrop();
+  return true;
+}
+
 /* Collection reveal: show the world before you sell to it. */
 function revealCollection(){
   const col = G.readyDrop;
@@ -215,7 +257,10 @@ function generateReview(col, sim, price, hypeAt){
   };
   Object.keys(S).forEach(k=>S[k]=+S[k].toFixed(1));
   // design & quality weigh heaviest in the verdict
-  const overall = Math.round((S.design*2 + S.quality*2 + S.value*1.5 + S.packaging*0.8 + S.exclusivity*1.6 + S.hype*1.1) / 9 * 10);
+  let overall = Math.round((S.design*2 + S.quality*2 + S.value*1.5 + S.packaging*0.8 + S.exclusivity*1.6 + S.hype*1.1) / 9 * 10);
+  if(col.fw) overall = Math.max(5, overall-6);   // runway critics are merciless
+  const mw = currentCalEvent();
+  if(mw && mw.type==='media') overall = clamp(overall + (overall>=65? 5 : -5), 1, 100);   // review week amplifies verdicts
   const stars = clamp(Math.round(overall/20), 1, 5);
   const entries = Object.entries(S);
   const best  = entries.reduce((a,b)=>b[1]>a[1]?b:a);
@@ -232,9 +277,18 @@ function generateReview(col, sim, price, hypeAt){
 function launchDrop(){
   const col = G.readyDrop;
   if(!col || !col.items || !col.items.length){ toast('Assemble a collection from the vault first'); return; }
+  // Fashion Week: launching this week can mean showing on the runway
+  const fwEvent = currentCalEvent();
+  if(fwEvent && fwEvent.type==='fashionweek' && G.prestige>=15 && col.fwDecided===undefined){
+    showModal(fwEvent.icon+' '+fwEvent.name, 'info',
+      `Show <b>"${col.name}"</b> on the runway? Entry <b>${fmt$(2500)}</b>. Critics judge harder and expectations run high — but the reach, prestige and resale attention are unmatched.`,
+      [{label:'SHOW AT FASHION WEEK (−$2,500)', cls:'primary', fn:()=>{ col.fwDecided=true; col.fw=true; launchDrop(); }},
+       {label:'Launch quietly instead', fn:()=>{ col.fwDecided=true; col.fw=false; launchDrop(); }}]);
+    return;
+  }
   if(G.droppedThisWeek){ toast('Already dropped this week — advance the week'); return; }
   const qty = col.qty, price = col.price;
-  const prodCost = Math.round(col.unitCost * qty * (G.eventMods.nextDropCost||1));
+  const prodCost = Math.round(col.unitCost * qty * (G.eventMods.nextDropCost||1)) + (col.fw? 2500:0);
   if(qty > productionCap()){ toast('Over your production capacity'); return; }
   if(G.cash < prodCost){ toast('Cannot afford this production run'); return; }
   if(!spendSlots(2)) return;   // launch day consumes most of the week
@@ -255,6 +309,37 @@ function launchDrop(){
 
   applyDropConsequences(col, qty, price, sim, revenue - prodCost);
   const review = generateReview(col, sim, price, hypeAt);
+
+  // v1.5: the calendar leaves its mark on the launch
+  const tags = [];
+  const ce = currentCalEvent();
+  if(col.fw){
+    const extra = Math.round((sim.followerGain||0)*0.5);
+    G.followers += extra; sim.followerGain = (sim.followerGain||0)+extra;
+    sim.resaleFinal = Math.round(sim.resaleFinal*1.15);
+    tags.push('Fashion Week Show');
+    if(review.overall>=75){ G.prestige = clamp(G.prestige+2.5,0,100); sim.factors.push(['Fashion Week triumph', `critics scored it ${review.overall} on the big stage — prestige soars`, 'good']); }
+    else if(review.overall<50){ G.prestige = clamp(G.prestige-3,0,100); G.reputation = clamp(G.reputation-4,0,100); sim.factors.push(['Torn apart at Fashion Week', 'a weak showing under the brightest lights costs dearly', 'bad']); }
+    else sim.factors.push(['Fashion Week showing', 'a respectable runway moment — reach and resale attention gained', 'good']);
+    feedPost('press','THE RECORD', `${G.brand} showed "${col.name}" at ${ce? ce.name:'Fashion Week'}. Verdict: ${review.overall}/100.`);
+  }
+  if(ce && ce.type==='competition'){
+    const qualifies = ce.id==='expo'? col.graphics==='minimal' : col.pieces<=2;
+    if(qualifies){
+      const winP = clamp(col.quality/12 + G.prestige/150 + (col.synergy||60)/400, 0.1, 0.85);
+      if(Math.random()<winP){
+        G.prestige = clamp(G.prestige+2,0,100); G.followers += ri(300,800);
+        tags.push('Competition Winner');
+        sim.factors.push(['🏅 '+ce.name.split('—')[1].trim()+' WON', 'the jury picked your collection — prestige and new eyes', 'good']);
+        feedPost('press','THE RECORD', `${G.brand}'s "${col.name}" wins the ${ce.name.split('—')[1].trim()}.`);
+        logEvolution(`Won the ${ce.name.split('—')[1].trim()} with "${col.name}"`);
+      } else sim.factors.push(['Competition entry', 'entered '+ce.name.split('—')[0].trim()+' — didn\'t take the prize, but judges noticed', 'good']);
+    }
+  }
+  if(season().id==='holiday') tags.push('Holiday Collection');
+  if(ce && ce.type==='spend') tags.push('Black Friday Drop');
+  if((sim.factors||[]).some(f=>f[0]==='TRENDSETTER')) tags.push('Trendsetter');
+  if(col.planned) sim.factors.push(['Planned rollout', 'weeks of scheduled teasers built real anticipation', 'good']);
 
   // which crowd carried the drop, which one shrugged (loyal core excluded)
   const segEntries = Object.entries(sim.perSegment).filter(([k])=>k!=='_loyal');
@@ -309,6 +394,7 @@ function launchDrop(){
     items: col.items.map(i=>({name:i.name, product:PRODUCTS.find(p=>p.id===i.product).name, quality:i.quality, timeless:i.timeless})),
     sizeType: sizeLabel(col.pieces),
     story: `"${col.name}" — a ${s.name.toLowerCase()} ${sizeLabel(col.pieces).toLowerCase()} exploring ${col.theme.toLowerCase()} across ${col.pieces} piece${col.pieces>1?'s':''}.`,
+    tags,
   };
   G.drops.push(record);
   // the vault pieces are spent — they live in the archive now

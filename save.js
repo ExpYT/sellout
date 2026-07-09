@@ -37,6 +37,10 @@ function loadGame(){
     s.milestones   = s.milestones   || {};
     s.history.weekly = s.history.weekly || [];
     if(s.stats.lifetimeProfit===undefined) s.stats.lifetimeProfit = 0;
+    // v1.5 migrations — the fashion calendar
+    s.compCal = s.compCal || [];
+    s.schedule = s.schedule || null;
+    s.annualAwards = s.annualAwards || {};
     // v1.4 migrations — design vault & collections
     if(s.slots===undefined) s.slots = 3;
     s.vault = s.vault || [];

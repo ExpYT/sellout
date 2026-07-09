@@ -51,6 +51,7 @@
   <button data-page="drop">Drop <span class="badge" id="dropBadge" style="display:none">●</span></button>
   <button data-page="marketing">Marketing</button>
   <button data-page="trends">Trends</button>
+  <button data-page="calendar">Calendar</button>
   <button data-page="team">Team</button>
   <button data-page="research">Research</button>
   <button data-page="history">History</button>
@@ -206,6 +207,25 @@
       <div class="card">
         <h3>Brand Evolution Timeline</h3>
         <div id="evolutionBox" style="max-height:280px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== CALENDAR ========== -->
+  <div class="page" id="page-calendar">
+    <div class="card" style="margin-bottom:16px">
+      <h3>🗓 The Fashion Year — 52 weeks</h3>
+      <div class="sub-stat" style="margin-bottom:10px" id="calLegend"></div>
+      <div id="calGrid" style="display:grid;grid-template-columns:repeat(13,1fr);gap:4px"></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>Next Up</h3>
+        <div id="calUpcoming"></div>
+      </div>
+      <div class="card">
+        <h3>🏆 Awards History</h3>
+        <div id="awardsHistory" style="max-height:300px;overflow-y:auto"></div>
       </div>
     </div>
   </div>

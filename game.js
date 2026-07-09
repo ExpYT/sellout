@@ -175,7 +175,98 @@ function season(w){
 }
 function seasonYear(){ return Math.floor((G.week-1)/52)+1; }
 
-/* Brand evolution timeline — the story of who you've been. */
+/* ============ v1.5 THE FASHION CALENDAR ============
+   Recurring yearly events (week-of-year 0..51). Each shapes
+   demand, marketing, reviews or opportunity while active.   */
+const CAL_EVENTS = [
+  {wk:6,  id:'springfw', name:'Spring Fashion Week',  icon:'🌸', type:'fashionweek', blurb:'Show a collection on the big stage — prestige for the brave.'},
+  {wk:14, id:'expo',     name:'Design Expo — Minimalist Challenge', icon:'🎨', type:'competition', req:'a minimal-graphics collection', blurb:'Launch a minimal-graphics collection this week to compete.'},
+  {wk:19, id:'summerfw', name:'Summer Fashion Week',  icon:'☀️', type:'fashionweek', blurb:'The season\'s loudest runway.'},
+  {wk:24, id:'conv',     name:'Streetwear Convention', icon:'🧢', type:'conv', blurb:'The whole culture in one hall — demand and marketing land harder.'},
+  {wk:28, id:'indiefair',name:'Independent Designer Fair — Capsule Challenge', icon:'🧵', type:'competition', req:'a 1–2 piece capsule', blurb:'Launch a capsule this week to compete for the fair\'s honours.'},
+  {wk:32, id:'autumnfw', name:'Autumn Fashion Week',  icon:'🍂', type:'fashionweek', blurb:'Critics sharpen their pens for the season\'s statements.'},
+  {wk:38, id:'forecast', name:'Trend Forecast Release', icon:'🔮', type:'forecast', blurb:'Industry forecasts published — trend predictions are razor-sharp this week.'},
+  {wk:44, id:'blackfri', name:'Black Friday',          icon:'🛒', type:'spend', blurb:'Wallets open. Everything sells harder.'},
+  {wk:46, id:'mediaweek',name:'Media Review Week',     icon:'📰', type:'media', blurb:'Every outlet reviews everything — great work shines, weak work gets torn apart.'},
+  {wk:51, id:'awards',   name:'Year-End Fashion Awards', icon:'🏆', type:'awards', blurb:'The industry crowns its year.'},
+];
+function yw(w){ return ((w||G.week)-1)%52; }
+function calEventAt(weekAbs){ return CAL_EVENTS.find(e=>e.wk===yw(weekAbs)); }
+function currentCalEvent(){ return calEventAt(G.week); }
+function isAnniversary(){ return G.week>1 && yw(G.week)===0; }
+
+/* Everything coming up, in one sorted list for the calendar page. */
+function upcomingItems(horizon){
+  const items = [];
+  for(let w=G.week+1; w<=G.week+(horizon||16); w++){
+    const e = calEventAt(w);
+    if(e) items.push({week:w, icon:e.icon, text:e.name});
+    if(yw(w)===0) items.push({week:w, icon:'🎂', text:'Brand Anniversary Week'});
+  }
+  (G.compCal||[]).forEach(c=>{ if(c.week>G.week) items.push({week:c.week, icon:'⚔️', text:c.name+' — planned release'}); });
+  if(G.schedule) items.push({week:G.schedule.week, icon:'🚀', text:`Your scheduled launch: "${G.schedule.colName||'Untitled'}"`});
+  if(G.activeResearch) items.push({week:G.week+G.activeResearch.weeksLeft, icon:'🧪', text:RESEARCH.find(r=>r.id===G.activeResearch.id).name+' completes'});
+  if(G.reinvent) items.push({week:G.week+G.reinvent.weeksLeft, icon:'⟳', text:'Reinvention completes'});
+  return items.sort((a,b)=>a.week-b.week);
+}
+
+/* Year-End Fashion Awards — the industry crowns its year. Winners
+   are permanent history; player wins tag the collection forever.  */
+function annualAwards(){
+  const year = Math.max(1, Math.ceil(G.week/52));
+  const yearDrops = G.drops.filter(d=>d.week > G.week-52);
+  const topComp = G.competitors.slice().sort((a,b)=>b.prestige-a.prestige)[0];
+  const best = f => yearDrops.filter(d=>f(d)!==null&&f(d)!==undefined).sort((a,b)=>f(b)-f(a))[0];
+  const cats = [];
+  const tagWin = (rec, cat)=>{ if(rec){ rec.tags=rec.tags||[]; if(!rec.tags.includes('🏆 '+cat)) rec.tags.push('🏆 '+cat); } };
+
+  const boty = G.prestige >= topComp.prestige;
+  cats.push(['Brand of the Year', boty? G.brand+' 👑' : topComp.name]);
+  if(boty){ G.prestige = clamp(G.prestige+3,0,100); G.followers += ri(500,1500); }
+
+  const coty = best(d=>d.review? d.review.overall:null);
+  if(coty && coty.review.overall>=65){ cats.push(['Collection of the Year', `"${coty.name}" (${G.brand})`]); tagWin(coty,'Collection of the Year'); G.prestige=clamp(G.prestige+2,0,100); }
+  else cats.push(['Collection of the Year', pick(G.competitors).name+"'s seasonal line"]);
+
+  const caps = best(d=>d.pieces<=2 && d.review? d.review.overall:null);
+  if(caps && caps.review.overall>=70){ cats.push(['Best Capsule', `"${caps.name}" (${G.brand})`]); tagWin(caps,'Best Capsule'); }
+  const innov = best(d=>d.originality||null);
+  if(innov && innov.originality>=7){ cats.push(['Most Innovative', `"${innov.name}" (${G.brand})`]); tagWin(innov,'Most Innovative'); }
+  const res = best(d=>d.soldOut? (d.resaleNow||d.resale):null);
+  if(res && (res.resaleNow||res.resale)>res.price*1.8){ cats.push(['Highest Resale Collection', `"${res.name}" — ${fmt$(res.resaleNow||res.resale)}`]); tagWin(res,'Highest Resale'); }
+  if(G.loyalty>=65) cats.push(['Best Community', G.brand+' 💚']);
+  if(G.week<=104 && yearDrops.length>=4) cats.push(['Best New Brand', G.brand]);
+
+  G.annualAwards = G.annualAwards||{};
+  G.annualAwards[year] = cats;
+  const playerWins = cats.filter(c=>c[1].includes(G.brand)).length;
+  logEvolution(`Year ${year} Awards: won ${playerWins} categor${playerWins===1?'y':'ies'}${boty?' including BRAND OF THE YEAR':''}`);
+  feedPost('press','THE RECORD', boty? `${G.brand} is officially BRAND OF THE YEAR. The bedroom-to-crown story writes itself.` : `${topComp.name} takes Brand of the Year. ${G.brand} watches, and plans.`);
+  showModal('🏆 YEAR-END FASHION AWARDS — YEAR '+year, boty?'good':'info',
+    cats.map(([c,w])=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span style="color:var(--dim)">${c}</span><b style="color:${w.includes(G.brand)?'var(--gold)':'var(--txt)'}">${w}</b></div>`).join(''),
+    [{label: playerWins? 'TAKE A BOW':'NEXT YEAR IS OURS', cls:'primary', fn:null}]);
+}
+
+/* Monthly industry report — a digest of what the sim actually did. */
+function monthlyReport(){
+  const t = G.trends||[];
+  const riser = t.slice().sort((a,b)=>b.vel-a.vel)[0];
+  const faller = t.slice().sort((a,b)=>a.vel-b.vel)[0];
+  const moods = [];
+  SEGMENTS.forEach(sg=>{ const p=(G.segPrefs||{})[sg.id]; if(!p) return;
+    if(p.price>1.15) moods.push(sg.name+' cautious with money');
+    else if(p.price<0.85) moods.push(sg.name+' spending freely');
+  });
+  const comps = G.competitors.slice().sort((a,b)=>(b.followers-(b.prevFollowers||b.followers))-(a.followers-(a.prevFollowers||a.followers)));
+  const s = season();
+  showModal('📊 INDUSTRY REPORT — WEEK '+G.week, 'info',
+    `<div class="stat-line">▲ <b>${trendDef(riser.id).name}</b> rising (${Math.round(riser.pop)}/100, +${riser.vel.toFixed(1)}/wk)<br>`+
+    `▼ <b>${trendDef(faller.id).name}</b> cooling (${Math.round(faller.pop)}/100)<br>`+
+    `👥 ${moods.length? moods.join(' · ') : 'Customer moods stable across segments'}<br>`+
+    `⚔️ <b>${comps[0].name}</b> has the momentum this month${comps[0].followers>G.followers? ' — and more followers than you':''}<br>`+
+    `🗓 ${s.name} outlook: ${s.blurb.toLowerCase()}</div>`,
+    [{label:'NOTED', cls:'primary', fn:null}]);
+}
 function logEvolution(text){
   G.evolution = G.evolution||[];
   G.evolution.push({week:G.week, text});
@@ -313,6 +404,9 @@ function newGame(brand, difficulty, dnaId){
     botStreak: 0,        // consecutive drops lost to resellers
     milestones: {},      // milestone id -> week earned
     slots: 3,            // weekly time slots: design=1, marketing=1, drop=2
+    compCal: [],         // v1.5 competitor release calendar
+    schedule: null,      // your scheduled launch
+    annualAwards: {},    // year -> award results
     vault: [],           // v1.4 design vault — pieces awaiting release
     colSel: [], colName:'', colRevealed:false,
     burnout: 0, designsThisWeek: 0,
@@ -432,8 +526,34 @@ function advanceWeek(){
   if(Math.random()<0.45) pressPost();
   checkMilestones();
 
-  // 11. Random events need decisions
-  const ev = maybeEvent();
+  // 10b. The fashion calendar turns
+  tickCompCal();
+  maybeRumour();
+  let bigMoment = false;
+  const ce = currentCalEvent();
+  if(ce){
+    feedPost('press','TREND DESK', `${ce.icon} This week: ${ce.name}. ${ce.blurb}`);
+    toast(ce.icon+' '+ce.name, 'gold');
+    if(ce.type==='awards'){ annualAwards(); bigMoment = true; }
+  }
+  const nextFW = CAL_EVENTS.find(e=>e.type==='fashionweek' && (e.wk-yw(G.week)+52)%52===2);
+  if(nextFW) feedPost('press','RUMOR MILL', `Brands are preparing for ${nextFW.name} — two weeks out. Ateliers are working nights.`);
+  if(isAnniversary()){
+    G.loyalty = clamp(G.loyalty+5,0,100);
+    feedPost('press','THE RECORD', `🎂 ${G.brand} turns ${Math.floor((G.week-1)/52)}. The community celebrates a brand that made it.`);
+    logEvolution('Celebrated a brand anniversary');
+  }
+  // scheduled launch arrives?
+  if(!bigMoment && G.schedule && G.week>=G.schedule.week){ if(executeSchedule()) bigMoment = true; }
+  else if(G.schedule){
+    // planned campaign drumbeat while waiting
+    G.cash -= 200; G.weekLog.expenses += 200;
+    G.hype = clamp(G.hype+3, 0, 100);
+    if(Math.random()<0.5) feedPost('', pick(HANDLES), `the "${G.schedule.colName}" teasers have me checking ${G.brand}'s page daily`);
+  }
+  // monthly digest (when nothing bigger owns the screen)
+  const ev = bigMoment? null : maybeEvent();
+  if(!bigMoment && !ev && G.week>4 && (G.week-1)%4===0) monthlyReport();
 
   saveGame();
   renderAll();

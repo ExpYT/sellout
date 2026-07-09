@@ -47,6 +47,7 @@ function renderAll(){
   renderDrop();
   renderMarketing();
   renderTrends();
+  renderCalendar();
   renderTeam();
   renderResearch();
   renderHistory();
@@ -319,12 +320,24 @@ function renderDrop(){
   const col = G.readyDrop;
 
   // --- the Creative Director's table: pick vault pieces ---
-  const picker = (G.vault||[]).map(v=>{
+  const reserved = G.schedule? G.schedule.colSel.map(String) : [];
+  const schedBanner = G.schedule? `
+    <div class="row-item" style="border-color:var(--gold)"><div class="ri-main">
+      <div class="ri-title" style="color:var(--gold)">🗓 "${G.schedule.colName}" scheduled — week ${G.schedule.week} (${G.schedule.week-G.week} wk${G.schedule.week-G.week>1?'s':''} away)</div>
+      <div class="ri-sub">Teasers running at $200/wk. It launches automatically — Fashion Week entry is taken if it lands on one.</div></div>
+      <button class="mini-btn" id="cancelSchedBtn">Cancel</button></div>` : '';
+  const picker = (G.vault||[]).filter(v=>!reserved.includes(String(v.id))).map(v=>{
     const on = (G.colSel||[]).some(id=>String(id)===String(v.id));
     return `<button class="opt ${on?'sel':''}" data-pick="${v.id}" style="text-align:left">${v.name}<small>${PRODUCTS.find(p=>p.id===v.product).name} · q${v.quality}${v.timeless?' · ⭐':''}</small></button>`;
   }).join('') || '<div class="sub-stat">The vault is empty — design pieces in the Studio first.</div>';
   const synCol = col? (col.synergy>=70?'var(--green)':col.synergy>=45?'var(--gold)':'var(--red)') : 'var(--dim)';
-  const builderHtml = `
+  const timing = (col && !G.schedule)? `
+    <div class="field"><label>Launch Timing — pick your moment on the Calendar</label>
+      <div class="opt-row">
+        <button class="opt sel" style="cursor:default">Now (this week)</button>
+        ${[2,4,8].map(n=>`<button class="opt" data-sched="${n}">+${n} weeks<small>${calEventAt(G.week+n)? calEventAt(G.week+n).icon+' '+calEventAt(G.week+n).name : season(G.week+n).name}</small></button>`).join('')}
+      </div><div class="sub-stat">Scheduling 3+ weeks out runs an automatic teaser campaign and earns a "Planned rollout" bonus at launch.</div></div>` : '';
+  const builderHtml = schedBanner + `
     <div class="field"><label>Collection Name</label>
       <input id="colNameInput" type="text" maxlength="26" placeholder="auto-named if blank" value="${(G.colName||'').replace(/"/g,'&quot;')}" spellcheck="false"></div>
     <div class="field"><label>Pieces from the Vault (${(G.colSel||[]).length} selected)</label>
@@ -332,7 +345,8 @@ function renderDrop(){
     ${col? `<div class="row-item"><div class="ri-main">
         <div class="ri-title">${col.name} <span style="color:var(--dim);font-weight:400">· ${sizeLabel(col.pieces)}</span></div>
         <div class="ri-sub">quality ${col.quality}/10 · synergy <b style="color:${synCol}">${col.synergy}/100</b> — ${col.synergy>=80?'a real collection':col.synergy>=45?'loosely related':'a merch dump, critics will say'}</div></div>
-        <button class="mini-btn" id="revealBtn" ${G.colRevealed?'disabled':''}>${G.colRevealed?'✓ Revealed':'📣 Reveal (pre-hype)'}</button></div>` : ''}`;
+        <button class="mini-btn" id="revealBtn" ${G.colRevealed?'disabled':''}>${G.colRevealed?'✓ Revealed':'📣 Reveal (pre-hype)'}</button></div>` : ''}
+    ${timing}`;
   if(!col){
     $id('dropConfig').innerHTML = builderHtml;
     bindBuilder();
@@ -396,6 +410,9 @@ function bindBuilder(){
   });
   const rb = $id('revealBtn');
   if(rb && !G.colRevealed) rb.onclick = revealCollection;
+  document.querySelectorAll('[data-sched]').forEach(b=>{ b.onclick = ()=>scheduleLaunch(+b.dataset.sched); });
+  const cb = $id('cancelSchedBtn');
+  if(cb) cb.onclick = cancelSchedule;
 }
 
 function renderForecast(col){
@@ -531,6 +548,41 @@ function renderTrends(){
     || '<div class="sub-stat">Your story starts with the first drop.</div>';
 }
 
+/* ---------------- the fashion calendar (v1.5) ---------------- */
+function renderCalendar(){
+  if(!$id('calGrid')) return;
+  const curYw = yw(G.week);
+  const cells = [];
+  for(let w=0; w<52; w++){
+    const abs = G.week - curYw + w;               // absolute week for this cell
+    const e = CAL_EVENTS.find(x=>x.wk===w);
+    const s = season(abs>0? abs : w+1);
+    const marks = [];
+    if(e) marks.push(e.icon);
+    if(w===0 && G.week>1) marks.push('🎂');
+    if((G.compCal||[]).some(c=>yw(c.week)===w && c.week>=G.week)) marks.push('⚔️');
+    if(G.schedule && yw(G.schedule.week)===w) marks.push('🚀');
+    if(G.activeResearch && yw(G.week+G.activeResearch.weeksLeft)===w) marks.push('🧪');
+    if(G.reinvent && yw(G.week+G.reinvent.weeksLeft)===w) marks.push('⟳');
+    const isNow = w===curYw;
+    const past = w<curYw;
+    const title = [s.name+' — wk'+(w+1), e? e.name:null, G.schedule&&yw(G.schedule.week)===w? 'Your scheduled launch':null].filter(Boolean).join(' · ');
+    cells.push(`<div title="${title}" style="min-height:34px;padding:2px;border:1px solid ${isNow?'var(--accent)':e?'var(--gold)':'var(--line)'};
+      background:${isNow?'rgba(255,43,43,.15)':'var(--panel2)'};opacity:${past?0.35:1};text-align:center;font-size:11px">
+      <div style="color:var(--dim);font-size:9px">${w+1}</div>${marks.join('')||'&nbsp;'}</div>`);
+  }
+  $id('calGrid').innerHTML = cells.join('');
+  $id('calLegend').innerHTML = `You are in <b style="color:var(--accent)">week ${curYw+1}</b> of the fashion year (${season().name}, year ${seasonYear()}). 🌸☀️🍂 fashion weeks · 🎨🧵 competitions · 🛒 Black Friday · 📰 review week · 🏆 awards · ⚔️ rival release · 🚀 your launch · 🧪 research · 🎂 anniversary`;
+  $id('calUpcoming').innerHTML = upcomingItems(20).slice(0,9).map(i=>
+    `<div class="row-item" style="padding:7px 12px"><div class="ri-main"><div class="ri-title" style="font-size:12.5px">${i.icon} ${i.text}</div></div>
+     <div class="ri-side" style="color:var(--dim);font-weight:400">${i.week-G.week===0?'this week':'in '+(i.week-G.week)+' wk'+((i.week-G.week)>1?'s':'')}</div></div>`).join('')
+    || '<div class="sub-stat">A quiet stretch. Design, build, prepare.</div>';
+  $id('awardsHistory').innerHTML = Object.entries(G.annualAwards||{}).reverse().map(([yr,cats])=>
+    `<div style="margin-bottom:10px"><b style="font-size:12px;color:var(--gold)">YEAR ${yr}</b>`+
+    cats.map(([c,wn])=>`<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0"><span style="color:var(--dim)">${c}</span><b style="color:${wn.includes(G.brand)?'var(--gold)':'var(--txt)'}">${wn}</b></div>`).join('')+`</div>`).join('')
+    || '<div class="sub-stat">The first Year-End Awards arrive in week 51. Build a year worth crowning.</div>';
+}
+
 /* ---------------- team ---------------- */
 function renderTeam(){
   const box = $id('teamList'); box.innerHTML='';
@@ -603,7 +655,8 @@ function renderHistory(){
     const rn = d.resaleNow||d.resale;
     const mv = d.resalePrev!==undefined? rn-d.resalePrev : 0;
     const arrow = mv>0? '<span style="color:var(--green)">▲</span>' : mv<0? '<span style="color:var(--red)">▼</span>' : '·';
-    const stars = d.review? `<span style="color:var(--gold)">${'★'.repeat(d.review.stars)}</span> ${d.review.overall}/100 · ` : '';
+    const stars = (d.review? `<span style="color:var(--gold)">${'★'.repeat(d.review.stars)}</span> ${d.review.overall}/100 · ` : '')
+      + (d.tags && d.tags.length? d.tags.map(t=>`<span style="color:var(--gold)">[${t}]</span>`).join(' ')+' · ' : '');
     return `<div class="row-item" data-arch="${G.drops.indexOf(d)}" style="cursor:pointer"><div class="ri-main">
       <div class="ri-title">${d.name} <span style="color:var(--dim);font-weight:400">wk${d.week} · ${d.product}</span></div>
       <div class="ri-sub">${stars}${fmtN(d.sold)}/${fmtN(d.qty)} sold ${d.soldOut? `· sold out in ${d.selloutMin<1? Math.round(d.selloutMin*60)+'s':d.selloutMin+' min'}`:''} · profit <span style="color:${d.profit>=0?'var(--green)':'var(--red)'}">${fmt$(d.profit)}</span></div></div>
@@ -640,7 +693,8 @@ function showArchiveCard(d){
     (d.pieces? line('Format', `${d.sizeType||''} · ${d.pieces} piece${d.pieces>1?'s':''} · synergy ${d.synergy}/100`) : '') +
     (d.items && d.items.length? `<div style="margin-top:10px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">The pieces</div>`+
       d.items.map(i=>`<div style="font-size:12px;padding:3px 0">• ${i.name} <span style="color:var(--dim)">— ${i.product}, q${i.quality}${i.timeless?' ⭐ timeless':''}</span></div>`).join('') : '') +
-    (d.story? `<div style="margin-top:10px;font-size:12px;color:var(--dim);font-style:italic">${d.story}</div>` : ''),
+    (d.story? `<div style="margin-top:10px;font-size:12px;color:var(--dim);font-style:italic">${d.story}</div>` : '') +
+    (d.tags && d.tags.length? `<div style="margin-top:10px">`+d.tags.map(t=>`<span class="opt" style="cursor:default;padding:3px 10px;font-size:11px;color:var(--gold);border-color:var(--gold)">${t}</span> `).join('')+`</div>` : ''),
     [{label:'CLOSE', cls:'primary', fn:null}]);
 }
 
