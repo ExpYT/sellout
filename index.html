@@ -31,6 +31,7 @@
 <div id="topbar" style="display:none">
   <div id="brandName">—</div>
   <div class="kpi"><span class="k-label">Week</span><span class="k-value" id="kWeek">1</span></div>
+  <div class="kpi"><span class="k-label">Season</span><span class="k-value" id="kSeason" style="color:var(--gold);font-size:13px">—</span></div>
   <div class="kpi"><span class="k-label">Cash</span><span class="k-value" id="kCash">$0</span></div>
   <div class="kpi"><span class="k-label">Followers</span><span class="k-value" id="kFollowers">0</span></div>
   <div class="kpi"><span class="k-label">Hype</span><span class="k-value" id="kHype">0</span></div>
@@ -48,6 +49,7 @@
   <button data-page="studio">Design Studio</button>
   <button data-page="drop">Drop <span class="badge" id="dropBadge" style="display:none">●</span></button>
   <button data-page="marketing">Marketing</button>
+  <button data-page="trends">Trends</button>
   <button data-page="team">Team</button>
   <button data-page="research">Research</button>
   <button data-page="history">History</button>
@@ -169,6 +171,35 @@
       <div class="card">
         <h3>Hype & Reach</h3>
         <div id="mktStats"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== TRENDS (Trend Forecast) ========== -->
+  <div class="page" id="page-trends">
+    <div class="grid grid-2" style="margin-bottom:16px">
+      <div class="card">
+        <h3>🗓 Season</h3>
+        <div id="seasonBox"></div>
+      </div>
+      <div class="card">
+        <h3>Customer Mood</h3>
+        <div id="segPrefBox"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <h3>Trend Forecast</h3>
+      <div class="sub-stat" id="forecastNote" style="margin-bottom:10px"></div>
+      <div id="trendList"></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>Trend Records</h3>
+        <div id="trendRecords"></div>
+      </div>
+      <div class="card">
+        <h3>Brand Evolution Timeline</h3>
+        <div id="evolutionBox" style="max-height:280px;overflow-y:auto"></div>
       </div>
     </div>
   </div>

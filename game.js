@@ -112,6 +112,76 @@ const DNAS = [
 ];
 function dna(){ return DNAS.find(d=>d.id===(G&&G.dna)) || DNAS[4]; }
 
+/* Segment affinity from DNA — blended during a reinvention so the old
+   audience fades out while the new one fades in over the transition. */
+function dnaSegBonus(segId){
+  const cur = dna().seg[segId]||0;
+  if(!G.reinvent) return cur;
+  const target = (DNAS.find(d=>d.id===G.reinvent.to)||dna()).seg[segId]||0;
+  const p = 1 - G.reinvent.weeksLeft / G.reinvent.total;
+  return cur*(1-p) + target*p;
+}
+
+/* ---------------- reinvention ----------------
+   Deliberately shifting identity: slow, public, and divisive. */
+function startReinvention(toId){
+  const target = DNAS.find(d=>d.id===toId);
+  if(!target || toId===G.dna || G.reinvent) return;
+  const cost = Math.max(3000, Math.round(G.followers*0.5));
+  if(G.cash < cost){ toast('A rebrand campaign costs '+fmt$(cost)); return; }
+  G.cash -= cost;
+  G.reinvent = {to:toId, weeksLeft:6, total:6};
+  logEvolution(`Began reinventing from ${dna().name} toward ${target.name}`);
+  feedPost('press','THREADWATCH', `${G.brand} is changing. Recent moves point away from ${dna().name.toLowerCase()} toward ${target.name.toLowerCase()}. Fans are... discussing it.`);
+  toast('Reinvention begun — 6 weeks of transition', 'gold');
+  saveGame(); renderAll();
+}
+function tickReinvention(){
+  if(!G.reinvent) return;
+  G.reinvent.weeksLeft--;
+  // change alienates before it attracts
+  G.loyalty = clamp(G.loyalty-2, 0, 100);
+  if(Math.random()<0.3) feedPost('', pick(HANDLES), pick([
+    `not sure how i feel about the new ${G.brand} direction tbh`,
+    `the old ${G.brand} would never. and maybe that's the point?`,
+    `day-one fan here. watching this rebrand with one eyebrow raised`,
+  ]));
+  if(G.reinvent.weeksLeft<=0){
+    const target = DNAS.find(d=>d.id===G.reinvent.to);
+    G.dna = G.reinvent.to;
+    G.reinvent = null;
+    G.hype = clamp(G.hype+12, 0, 100);
+    G.followers += ri(150, 400) + Math.round(G.prestige*4);
+    logEvolution(`Completed its reinvention — ${G.brand} completed its reinvention as a ${target.name} brand`);
+    feedPost('press','RACKED DAILY', `It's official: ${G.brand} has completed its reinvention as a ${target.name.toLowerCase()} brand. Bold. The new audience is arriving already.`);
+    toast('🔥 REINVENTION COMPLETE — you are now a '+target.name+' brand', 'gold');
+    checkMilestones();
+  }
+}
+
+/* Fashion seasons — a 52-week year that reshapes demand and mood.
+   prod: per-product demand multipliers · spend: wallet mood ·
+   mkt: how well marketing lands this season.                     */
+const SEASONS = [
+  {id:'spring', name:'Spring',  from:0,  to:9,  spend:1.00, mkt:1.05, prod:{tee:1.10, oversize:1.05, cap:1.05},               blurb:'Fresh starts. Light layers move; energy is high.'},
+  {id:'summer', name:'Summer',  from:10, to:19, spend:1.00, mkt:1.00, prod:{tee:1.25, cap:1.20, acc:1.10, hoodie:0.72, crew:0.85}, blurb:'Shirts and caps fly. Nobody buys fleece in a heatwave.'},
+  {id:'autumn', name:'Autumn',  from:20, to:29, spend:1.00, mkt:1.00, prod:{hoodie:1.18, crew:1.15, tee:0.92},                blurb:'Layering season begins. Heavier pieces wake up.'},
+  {id:'winter', name:'Winter',  from:30, to:41, spend:0.98, mkt:0.95, prod:{hoodie:1.30, crew:1.20, tee:0.78, cap:0.85},      blurb:'Hoodie weather. Cold hands still find checkout buttons.'},
+  {id:'holiday',name:'Holiday', from:42, to:51, spend:1.22, mkt:1.15, prod:{hoodie:1.15, crew:1.10, acc:1.20},                blurb:'Everyone is spending — and every brand knows it. Loud market.'},
+];
+function season(w){
+  const yw = ((w||G.week)-1) % 52;
+  return SEASONS.find(s=>yw>=s.from && yw<=s.to) || SEASONS[0];
+}
+function seasonYear(){ return Math.floor((G.week-1)/52)+1; }
+
+/* Brand evolution timeline — the story of who you've been. */
+function logEvolution(text){
+  G.evolution = G.evolution||[];
+  G.evolution.push({week:G.week, text});
+  if(G.evolution.length>40) G.evolution.shift();
+}
+
 /* Milestones — permanent trophies. Celebration only, no gameplay bonus. */
 const MILESTONES = [
   {id:'sellout1', name:'First Sellout',        cond:()=>G.drops.some(d=>d.soldOut)},
@@ -128,6 +198,9 @@ const MILESTONES = [
   {id:'col10',    name:'10 Collections Released', cond:()=>G.drops.length>=10},
   {id:'luxstat',  name:'Luxury Status',        cond:()=>G.prestige>=75},
   {id:'icon',     name:'Fashion Icon',         cond:()=>G.prestige>=92},
+  {id:'reinvent', name:'Reinvented the Brand', cond:()=>!!(G.evolution||[]).some(e=>e.text.includes('completed its reinvention'))},
+  {id:'setter',   name:'Trendsetter — Fashion Followed YOU', cond:()=>!!G.stats.setTrend},
+  {id:'year1',    name:'Survived a Full Year', cond:()=>G.week>=53},
 ];
 function checkMilestones(){
   MILESTONES.forEach(m=>{
@@ -207,7 +280,13 @@ function newGame(brand, difficulty, dnaId){
     tut: {},             // tutorial steps already shown
     botStreak: 0,        // consecutive drops lost to resellers
     milestones: {},      // milestone id -> week earned
+    trends: [],          // living trend engine (filled by initTrends)
+    segPrefs: {},        // evolving customer tastes
+    evolution: [],       // brand story timeline
+    reinvent: null,      // active identity transition
+    seasonStats: {},     // per-season revenue/drops aggregates
   };
+  initTrends();
   G.history.weekly = [];
   G.history.followers = [D.followers];
   feedPost('sys', null, `${brand} founded in a bedroom. One heat press, ${fmt$(G.cash)}, and a ${D.name.toLowerCase()} vision.`);
@@ -270,10 +349,20 @@ function advanceWeek(){
   // 7. Resale market moves on old drops
   tickResaleMarket();
 
-  // 8. Trend rotates sometimes — chase it or set your own course
+  // 8. The living industry: trends evolve, tastes drift, seasons turn
+  const prevSeason = season(G.week);
+  tickTrends();
+  tickSegPrefs();
+  tickReinvention();
+  // micro-trend (theme/product flavour) still rotates underneath
   if(Math.random()<0.4){
     G.trend = {theme: pick(THEMES), product: pick(PRODUCTS).id};
-    feedPost('sys', null, `Trend report: "${G.trend.theme}" energy and ${PRODUCTS.find(p=>p.id===G.trend.product).name.toLowerCase()}s are having a moment.`);
+  }
+  const newSeason = season(G.week+1);
+  if(newSeason.id!==prevSeason.id){
+    feedPost('press','TREND DESK', `${newSeason.name} ${newSeason.id==='holiday'?'season':''} begins: ${newSeason.blurb}`);
+    toast('🗓 '+newSeason.name+' begins', 'gold');
+    logEvolution(`${newSeason.name} of year ${seasonYear()} began`);
   }
 
   // 9. Reset weekly counters + record history for the analytics charts

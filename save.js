@@ -37,6 +37,14 @@ function loadGame(){
     s.milestones   = s.milestones   || {};
     s.history.weekly = s.history.weekly || [];
     if(s.stats.lifetimeProfit===undefined) s.stats.lifetimeProfit = 0;
+    // v1.3 migrations — the living fashion industry
+    s.segPrefs    = s.segPrefs    || {};
+    s.evolution   = s.evolution   || [];
+    s.reinvent    = s.reinvent    || null;
+    s.seasonStats = s.seasonStats || {};
+    if(!s.trends || !s.trends.length){
+      s.trends = TRENDS_DEF.map(t=>({id:t.id, pop:ri(25,70), vel:rand(-1.5,1.5), prev:50, hist:[], reason:'', reasonWk:0}));
+    }
     // old randomly-named competitors become the fixed personas, keeping their numbers
     if(s.competitors && s.competitors.length && !s.competitors[0].style){
       s.competitors = s.competitors.map((c,i)=>({

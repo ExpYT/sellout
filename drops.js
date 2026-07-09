@@ -93,6 +93,7 @@ function runChannel(id){
   const photo = empBonus('photographer');
   let gain = rand(ch.base[0], ch.base[1]) * (1 + mkt*0.8);
   gain *= (dna().mkt && dna().mkt[id]) || 1;   // your DNA's home channel hits harder
+  gain *= season().mkt;                        // seasons change how marketing lands
   let note = '';
 
   if(id==='tiktok'){
@@ -127,7 +128,7 @@ const REVIEW_KNOCK = {
 };
 function generateReview(col, sim, price, hypeAt){
   const S = {
-    design:      clamp(col.quality*0.62 + (col.theme===G.trend.theme?1.4:0) + (col.staleTheme?-1.4:0) + rand(0,1.6), 1, 10),
+    design:      clamp(col.quality*0.62 + (col.theme===G.trend.theme?1.4:0) + (col.staleTheme?-1.4:0) - (sim.fatigue||0)*4 + rand(0,1.6), 1, 10),
     quality:     clamp(col.quality + rand(-0.5,0.5), 1, 10),
     value:       clamp(8 - Math.max(0,(price/col.productObj.retail-1))*5.5 + (col.quality-5.5)*0.55, 1, 10),
     packaging:   clamp({poly:4.5, box:8.6, eco:7.2}[col.packaging] + rand(-0.5,1), 1, 10),
@@ -184,6 +185,28 @@ function launchDrop(){
   const goods = (sim.factors||[]).filter(f=>f[2]==='good');
   const bads  = (sim.factors||[]).filter(f=>f[2]==='bad');
 
+  // v1.3: which living trends this drop rode, and the season it landed in
+  const trendTags = (G.trends||[]).filter(t=>trendDef(t.id).match(col)>=0.5 && t.pop>55).map(t=>t.id);
+  const s = season();
+  G.seasonStats = G.seasonStats||{};
+  const ss = G.seasonStats[s.id] = G.seasonStats[s.id]||{rev:0, profit:0, drops:0};
+  ss.rev += revenue; ss.profit += revenue-prodCost; ss.drops++;
+
+  // TRENDSETTER: prestige brands can bend fashion itself (rare, late-game)
+  if(G.prestige>=60 && sim.soldOut && sim.scarcity>=2 && col.quality>=7.5){
+    const carried = (G.trends||[]).filter(t=>trendDef(t.id).match(col)>=0.7);
+    if(carried.length && Math.random()<0.25){
+      const t = pick(carried);
+      t.pop = clamp(t.pop+18, 3, 97); t.vel += 3;
+      t.reason = `rising because ${G.brand}'s "${col.name}" made it undeniable`;
+      t.reasonWk = G.week;
+      G.stats.setTrend = true;
+      sim.factors.push(['TRENDSETTER', `fashion just followed YOU — ${trendDef(t.id).name} surges globally off this drop`, 'good']);
+      feedPost('press','THREADWATCH', `${G.brand} didn't follow the trend. They MADE one. ${trendDef(t.id).name} surges after "${col.name}".`);
+      logEvolution(`Set a global trend: ${trendDef(t.id).name} surged off "${col.name}"`);
+    }
+  }
+
   const record = {
     name:col.name, week:G.week, product:col.productObj.name, theme:col.theme,
     qty, price, sold:sim.sold, soldOut:sim.soldOut, selloutMin:sim.selloutMin,
@@ -199,6 +222,9 @@ function launchDrop(){
     topGood: goods.length? goods[0][0] : null,
     topBad:  bads.length?  bads[0][0]  : null,
     review,
+    // v1.3 living-fashion data
+    season: s.id, trendTags,
+    attrs: {product:col.product, palette:col.palette, fit:col.fit, graphics:col.graphics, logo:col.logo},
   };
   G.drops.push(record);
   G.history.revenue.push({name:col.name, v:revenue});
@@ -227,6 +253,7 @@ const VOICES = {
   limitsGood:  [c=>`purchase limits meant real ones actually copped. respect, ${G.brand}`],
   stale:       [c=>`another ${c.theme} collection? we've seen this one already`],
   resaleHype:  [c=>`resale already 2x+. should've bought two`],
+  fatigue:     [c=>`another ${c.productObj.name.toLowerCase()}? feels like last month's drop`, c=>`${G.brand} has stopped taking risks and it shows`, c=>`i could've predicted this entire collection. wake me when they try something`],
 };
 function react(pool, col, hot){
   const line = pick(VOICES[pool])(col);
@@ -315,6 +342,15 @@ function applyDropConsequences(col, qty, price, sim, profit){
   if(col.theme===G.trend.theme || col.product===G.trend.product) F.push(['On trend', 'trend alignment pulled in the hype crowd', 'good']);
   if(hypeAtLaunch<20) F.push(['Low hype at launch', 'you dropped to a quiet room — marketing before launching matters', 'bad']);
   else if(hypeAtLaunch>=60) F.push(['Launched hot', `hype at ${Math.round(hypeAtLaunch)} put this in front of everyone`, 'good']);
+
+  // --- product fatigue: repetition bores the whole market ---
+  if((sim.fatigue||0)>0.08){
+    const cut = Math.round((sim.followerGain||0) * Math.min(0.6, sim.fatigue*1.5));
+    G.followers -= cut; sim.followerGain = (sim.followerGain||0) - cut;
+    G.hype = clamp(G.hype-3, 0, 100);
+    F.push(['Déjà vu', `too similar to your recent drops — demand −${Math.round(sim.fatigue*100)}%, follower growth cut. Reinvent something.`, 'bad']);
+    react('fatigue', col, false);
+  }
 }
 
 /* Post-drop breakdown: the numbers, WHO bought, and WHY it went
@@ -339,6 +375,13 @@ function showDropResults(rec, sim, prodCost){
       <span style="width:110px;color:var(--red)">Resellers</span>
       <div style="flex:1;height:8px;background:var(--panel2);border-radius:4px"><div style="height:100%;width:${Math.round(100*sim.resellerBuys/maxSeg)}%;background:var(--red);border-radius:4px"></div></div>
       <b style="width:52px;text-align:right">${fmtN(sim.resellerBuys)}</b></div>` : '');
+
+  // how the fashion climate moved the numbers (trends, season, fatigue)
+  const climate = (sim.trendFactors||[]).map(([name, eff, pop])=>`
+    <div style="display:flex;justify-content:space-between;gap:8px;margin:4px 0;font-size:12.5px">
+      <span>${eff>=0?'<span style="color:var(--green)">▲</span>':'<span style="color:var(--red)">▼</span>'} ${name}${pop!==null&&pop!==undefined?` <span style="color:var(--dim)">(${Math.round(pop)}/100)</span>`:''}</span>
+      <b style="color:${eff>=0?'var(--green)':'var(--red)'}">${eff>=0?'+':''}${Math.round(eff*100)}%</b></div>`).join('')
+    || '<div style="font-size:12.5px;color:var(--dim)">A neutral week — no trend, season or fatigue effects moved this drop.</div>';
 
   // why it went this way
   const why = (sim.factors||[]).map(([label, text, tone])=>`
@@ -385,6 +428,7 @@ function showDropResults(rec, sim, prodCost){
   showModal(rec.soldOut? 'SOLD OUT' : (rec.sold/rec.qty>=0.7? 'SOLID NUMBERS':'IT SAT'),
     rec.soldOut? 'good' : (rec.sold/rec.qty>=0.7?'info':'bad'),
     firstTime + head + reviewHtml +
+    `<div style="margin:14px 0 4px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Fashion climate</div>${climate}` +
     `<div style="margin:14px 0 4px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Who showed up</div>${who}` +
     `<div style="margin:14px 0 2px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Why it went this way</div>${why}` +
     `<div style="margin:14px 0 2px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Customer voices</div>${custHtml}`,

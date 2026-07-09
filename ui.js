@@ -46,6 +46,7 @@ function renderAll(){
   renderStudio();
   renderDrop();
   renderMarketing();
+  renderTrends();
   renderTeam();
   renderResearch();
   renderHistory();
@@ -73,6 +74,7 @@ function renderTut(){
 function renderTopbar(){
   $id('brandName').innerHTML = G.brand+' <span>●</span>';
   $id('kWeek').textContent = G.week;
+  $id('kSeason').textContent = season().name + (season().id==='holiday'? ' 🎁':'');
   $id('kCash').textContent = fmt$(G.cash);
   $id('kCash').className = 'k-value '+(G.cash<0?'k-neg':'k-pos');
   $id('kFollowers').textContent = fmtN(G.followers);
@@ -107,13 +109,24 @@ function renderDashboard(){
     </div>`).join('');
   $id('diffLabel').textContent = diff().name;
 
-  // brand identity: DNA roots + traits earned through behaviour
+  // brand identity: DNA roots + traits earned through behaviour + reinvention
   const traits = brandPersonality();
+  const reinventing = G.reinvent? `<div class="sub-stat" style="color:var(--gold);margin-top:8px">⟳ Reinventing toward <b>${DNAS.find(d=>d.id===G.reinvent.to).name}</b> — ${G.reinvent.weeksLeft} weeks left. Old fans are uneasy; a new crowd is arriving.</div>` : '';
   $id('identityBox').innerHTML = `
-    <div class="sub-stat">Founded as a <b style="color:var(--txt)">${dna().name}</b> brand</div>
+    <div class="sub-stat">${G.reinvent? 'Transitioning from':'Founded as'} a <b style="color:var(--txt)">${dna().name}</b> brand</div>
     <div style="margin:10px 0 6px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">The scene knows you as</div>
     <div class="big-stat" style="font-size:19px;color:var(--accent)">${traits.join(' · ')}</div>
-    <div class="sub-stat" style="margin-top:8px">Computed from your last 6 drops — identity follows behaviour, not intentions.</div>`;
+    <div class="sub-stat" style="margin-top:8px">Computed from your last 6 drops — identity follows behaviour, not intentions.</div>
+    ${reinventing}
+    ${!G.reinvent? `<button class="mini-btn" id="reinventBtn" style="margin-top:10px">⟳ Begin reinvention…</button>`:''}`;
+  const rb = $id('reinventBtn');
+  if(rb) rb.onclick = ()=>{
+    const cost = Math.max(3000, Math.round(G.followers*0.5));
+    showModal('REINVENT '+G.brand+'?', 'info',
+      `Deliberately shift your brand DNA. Takes <b>6 weeks</b>, costs <b>${fmt$(cost)}</b> in rebrand campaigns, and loyalty dips while old fans adjust — but a whole new audience discovers you.<br><br>Where is ${G.brand} headed?`,
+      DNAS.filter(d=>d.id!==G.dna).map(d=>({label:`${d.name} — ${d.blurb}`, fn:()=>startReinvention(d.id)}))
+        .concat([{label:'Stay the course', cls:'primary', fn:null}]));
+  };
 
   // lifetime records
   const D = G.drops;
@@ -220,7 +233,11 @@ function renderStudio(){
   nameInput.oninput = ()=>{ d.name = nameInput.value; };
 
   optRow('optProduct', PRODUCTS, d.product, v=>d.product=v, null,
-    p=>`cost ~${fmt$(p.cost)} · retail ${fmt$(p.retail)}${p.id===G.trend.product?' · 🔥 trending':''}`);
+    p=>{
+      const sm = (season().prod[p.id]||1);
+      const seasonNote = sm>1? ` · ${season().name.toLowerCase()} +${Math.round((sm-1)*100)}%` : sm<1? ` · ${season().name.toLowerCase()} ${Math.round((sm-1)*100)}%` : '';
+      return `cost ~${fmt$(p.cost)} · retail ${fmt$(p.retail)}${seasonNote}${p.id===G.trend.product?' · 🔥 trending':''}`;
+    });
   optRow('optTheme',   THEMES,   d.theme,   v=>d.theme=v, null,
     t=> t===G.trend.theme? '🔥 trending — street & fashion crowds bite'
       : (G.drops.length && G.drops[G.drops.length-1].theme===t? '⚠ same as last drop — reads stale':''));
@@ -308,6 +325,11 @@ function renderForecast(col){
   const reach = weeklyReach();
   let est = 0;
   SEGMENTS.forEach(s=>{ est += reach*s.share*segmentInterest(s, col, col.price); });
+  const tb = trendBonusFor(col);
+  est *= tb.mult;
+  const climateNote = tb.mult>1.08? `<span style="color:var(--green)">the fashion climate favours this design (+${Math.round((tb.mult-1)*100)}%)</span>`
+    : tb.mult<0.92? `<span style="color:var(--red)">the fashion climate is against this design (${Math.round((tb.mult-1)*100)}%)</span>`
+    : 'the fashion climate is neutral on this design';
   const noise = 0.35 - empBonus('marketing')*0.12;
   const lo = Math.round(est*(1-noise)), hi = Math.round(est*(1+noise));
   const prodCost = Math.round(col.unitCost*col.qty*(G.eventMods.nextDropCost||1));
@@ -315,7 +337,7 @@ function renderForecast(col){
     <div class="meter-row"><div class="m-head"><span>Current hype</span><b>${Math.round(G.hype)}/100</b></div>
       <div class="meter red"><div style="width:${G.hype}%"></div></div></div>
     <div class="sub-stat" style="margin:10px 0">Estimated genuine interest: <b style="color:var(--txt)">${fmtN(lo)}–${fmtN(hi)} buyers</b><br>
-    (resellers pile in on top if resale margin looks juicy)</div>
+    ${climateNote} · resellers pile in on top if resale margin looks juicy</div>
     <div class="row-item"><div class="ri-main"><div class="ri-title">Production run</div></div><div class="ri-side">${fmtN(col.qty)} units · ${fmt$(prodCost)}</div></div>
     <div class="row-item"><div class="ri-main"><div class="ri-title">If it sells out</div></div><div class="ri-side" style="color:var(--green)">${fmt$(col.qty*col.price-prodCost)} profit</div></div>
     <div class="sub-stat">Undersupply → sellout speed, resale heat, prestige. Oversupply → dead stock and a bruised reputation. Pick your poison.</div>`;
@@ -342,6 +364,93 @@ function renderMarketing(){
     <div class="row-item"><div class="ri-main"><div class="ri-title">Weekly reach</div><div class="ri-sub">followers amplified by hype${G.research.website?' + Website v2':''}</div></div>
       <div class="ri-side">${fmtN(weeklyReach())} people</div></div>
     <div class="row-item"><div class="ri-main"><div class="ri-title">Followers</div></div><div class="ri-side">${fmtN(G.followers)}</div></div>`;
+}
+
+/* ---------------- trends (Trend Forecast page) ---------------- */
+function sparkBars(hist, color){
+  if(!hist || hist.length<2) return '<span style="color:var(--dim);font-size:10px">new</span>';
+  return `<span style="display:inline-flex;align-items:flex-end;gap:1px;height:18px">`+
+    hist.map(v=>`<span style="width:4px;height:${Math.max(2,Math.round(v/100*18))}px;background:${color};opacity:.8"></span>`).join('')+`</span>`;
+}
+
+function renderTrends(){
+  if(!$id('trendList')) return;
+  const s = season();
+  const yw = ((G.week-1)%52);
+  const weeksLeft = s.to - yw + 1;
+  const nextS = SEASONS[(SEASONS.indexOf(s)+1)%SEASONS.length];
+  const prodChips = Object.entries(s.prod).map(([id,m])=>{
+    const p = PRODUCTS.find(x=>x.id===id);
+    return `<span class="opt" style="cursor:default;padding:4px 10px;font-size:11px;color:${m>1?'var(--green)':'var(--red)'}">${p.name}s ${m>1?'+':''}${Math.round((m-1)*100)}%</span>`;
+  }).join(' ');
+  $id('seasonBox').innerHTML = `
+    <div class="big-stat" style="font-size:20px">${s.name} <span style="font-size:12px;color:var(--dim)">· year ${seasonYear()} · ${weeksLeft} wk${weeksLeft>1?'s':''} left</span></div>
+    <div class="sub-stat" style="margin:6px 0 10px">${s.blurb}</div>
+    <div class="opt-row">${prodChips}</div>
+    <div class="sub-stat" style="margin-top:10px">Spending mood ${s.spend>1?'+':''}${Math.round((s.spend-1)*100)}% · marketing lands ${s.mkt>1?'+':''}${Math.round((s.mkt-1)*100)}%</div>
+    <div class="sub-stat" style="margin-top:6px;color:var(--gold)">Next: ${nextS.name} — ${nextS.blurb.toLowerCase()}</div>`;
+
+  // evolving customer mood
+  const moods = [];
+  SEGMENTS.forEach(sg=>{
+    const p = (G.segPrefs||{})[sg.id]; if(!p) return;
+    const bits = [];
+    if(p.q>1.12) bits.push('scrutinising quality'); else if(p.q<0.88) bits.push('relaxed about quality');
+    if(p.price>1.12) bits.push('price-sensitive'); else if(p.price<0.88) bits.push('spending freely');
+    if(p.pack>1.12) bits.push('obsessed with packaging');
+    if(bits.length) moods.push(`<div class="row-item" style="padding:7px 12px"><div class="ri-main"><div class="ri-title" style="font-size:12.5px">${sg.name}</div><div class="ri-sub">currently ${bits.join(' · ')}</div></div></div>`);
+  });
+  $id('segPrefBox').innerHTML = moods.join('') || '<div class="sub-stat">No strong signals this week — every crowd is behaving normally. Tastes drift slowly; check back.</div>';
+
+  // forecast quality tier from research
+  $id('forecastNote').textContent = G.research.trendlab? 'Fashion Intelligence Lab active — forecasts are near-precise (±3).'
+    : G.research.forecasting? 'Trend Analytics Desk active — forecasts are decent (±8). The Lab would sharpen them further.'
+    : 'Raw industry gossip — forecasts are rough (±16). Research an Analytics Desk to sharpen them.';
+
+  // the living trend board
+  const rows = (G.trends||[]).slice().sort((a,b)=>b.pop-a.pop).map(t=>{
+    const def = trendDef(t.id);
+    const [state, col] = trendState(t);
+    const fc = trendForecast(t);
+    const mv = t.pop - (t.prev||t.pop);
+    const arrow = mv>0.5? '<span style="color:var(--green)">▲</span>' : mv<-0.5? '<span style="color:var(--red)">▼</span>' : '·';
+    const reason = (t.reason && t.reasonWk>=G.week-4)? `<div class="ri-sub" style="color:var(--gold)">${t.reason}</div>` : '';
+    return `<div class="row-item">
+      <div class="ri-main">
+        <div class="ri-title" style="font-size:13px">${def.name} <span style="color:${col};font-size:11px">· ${state}</span></div>
+        <div class="meter ${t.pop>=60?'green':t.pop<35?'red':''}" style="max-width:220px"><div style="width:${t.pop}%"></div></div>
+        ${reason}
+      </div>
+      <div style="text-align:right">
+        ${sparkBars(t.hist, t.pop>=55?'var(--green)':'var(--dim)')}
+        <div class="ri-sub">${arrow} ${Math.round(t.pop)}/100 · forecast ~${fc}</div>
+      </div></div>`;
+  }).join('');
+  $id('trendList').innerHTML = rows;
+
+  // trend records + season performance
+  const tagged = {};
+  G.drops.forEach(d=>(d.trendTags||[]).forEach(tag=>{ (tagged[tag]=tagged[tag]||[]).push(d.profit); }));
+  const bestTrend = Object.entries(tagged).map(([id,ps])=>[id, ps.reduce((a,b)=>a+b,0)/ps.length, ps.length])
+    .filter(([,,n])=>n>=2).sort((a,b)=>b[1]-a[1])[0];
+  const volatile = (G.trends||[]).slice().sort((a,b)=>{
+    const sw = h => (h||[]).length>3? Math.max(...h)-Math.min(...h) : 0;
+    return sw(b.hist)-sw(a.hist);
+  })[0];
+  const seasonRows = SEASONS.map(se=>{
+    const st = (G.seasonStats||{})[se.id];
+    return st? `<div class="row-item" style="padding:7px 12px"><div class="ri-main"><div class="ri-title" style="font-size:12.5px">${se.name}</div><div class="ri-sub">${st.drops} drops</div></div><div class="ri-side" style="color:${st.profit>=0?'var(--green)':'var(--red)'}">${fmt$(st.profit)} profit</div></div>` : '';
+  }).join('');
+  $id('trendRecords').innerHTML =
+    (bestTrend? `<div class="row-item" style="padding:8px 12px"><div class="ri-main"><div class="ri-sub">Most successful trend for you</div><div class="ri-title" style="font-size:12.5px">${trendDef(bestTrend[0]).name} — avg ${fmt$(bestTrend[1])}/drop</div></div></div>`:'') +
+    (volatile && volatile.hist.length>3? `<div class="row-item" style="padding:8px 12px"><div class="ri-main"><div class="ri-sub">Most volatile trend</div><div class="ri-title" style="font-size:12.5px">${trendDef(volatile.id).name} — swung ${Math.max(...volatile.hist)-Math.min(...volatile.hist)} points recently</div></div></div>`:'') +
+    seasonRows ||
+    '<div class="sub-stat">Drop through a few seasons and your trend track record appears here.</div>';
+
+  // brand evolution timeline
+  $id('evolutionBox').innerHTML = (G.evolution||[]).slice().reverse().map(e=>
+    `<div class="row-item" style="padding:7px 12px"><div class="ri-main"><div class="ri-title" style="font-size:12.5px">${e.text}</div></div><div class="ri-side" style="color:var(--dim);font-weight:400">wk ${e.week}</div></div>`).join('')
+    || '<div class="sub-stat">Your story starts with the first drop.</div>';
 }
 
 /* ---------------- team ---------------- */

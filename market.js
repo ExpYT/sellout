@@ -6,6 +6,141 @@
 
 "use strict";
 
+/* ================= LIVING TREND ENGINE =================
+   Twelve trends rise and fall on popularity (0–100) and
+   velocity. Each knows how to score a collection against
+   itself, so demand, reviews and news all share one truth. */
+const TRENDS_DEF = [
+  {id:'oversized', name:'Oversized Silhouettes', match:c=> c.fit==='oversized'?1 : c.fit==='boxy'?0.6:0,
+   season:{summer:-0.3, winter:0.4}},
+  {id:'minimal',   name:'Minimal Branding',      match:c=> (c.graphics==='minimal'?0.6:0)+(c.logo==='tonal'?0.4:c.logo==='chest'?0.2:0)},
+  {id:'heavylogo', name:'Heavy Logos',           match:c=> c.logo==='front'?1 : c.logo==='back'?0.5:0},
+  {id:'boldgfx',   name:'Bold Graphics',         match:c=> c.graphics==='heavy'?1 : c.graphics==='photo'?0.5:0,
+   season:{summer:0.3}},
+  {id:'neutral',   name:'Neutral Colours',       match:c=> c.palette==='mono'?1 : c.palette==='earth'?0.7:0,
+   season:{autumn:0.4, winter:0.3, summer:-0.3}},
+  {id:'brights',   name:'Bright Palettes',       match:c=> c.palette==='neon'?1 : c.palette==='pastel'?0.6:0,
+   season:{spring:0.4, summer:0.5, winter:-0.4}},
+  {id:'luxmat',    name:'Luxury Materials',      match:c=> c.material==='organic'?1 : c.material==='heavy'?0.6:0,
+   season:{holiday:0.5}},
+  {id:'vintage',   name:'Vintage Revival',       match:c=> ((G&&G.dna==='vintage')?0.6:0)+(c.palette==='earth'?0.4:0)},
+  {id:'y2k',       name:'Y2K Nostalgia',         match:c=> ((G&&G.dna==='y2k')?0.6:0)+((c.palette==='neon'||c.palette==='pastel')?0.4:0)},
+  {id:'techwear',  name:'Techwear',              match:c=> ((G&&G.dna==='tech')?0.7:0)+(c.fit==='slim'?0.3:0),
+   season:{autumn:0.3}},
+  {id:'skate',     name:'Skate Culture',         match:c=> ((G&&G.dna==='skate')?0.7:0)+(c.graphics==='heavy'?0.3:0),
+   season:{spring:0.3, summer:0.3}},
+  {id:'gorp',      name:'Gorpcore / Outdoor',    match:c=> ((G&&G.dna==='outdoor')?0.7:0)+(c.packaging==='eco'?0.3:0),
+   season:{autumn:0.5, winter:0.3}},
+];
+const RISE_REASONS = ['a runway moment everyone screenshotted','one viral fit-check','a documentary rewiring taste','stylists pushing it on every shoot','resale money chasing it','a music video wardrobe'];
+const FALL_REASONS = ['total market saturation','fast-fashion knockoffs everywhere','the fashion crowd moving on','one very public fashion faux pas','resale prices collapsing','simple boredom'];
+
+function initTrends(){
+  G.trends = TRENDS_DEF.map(t=>({id:t.id, pop:ri(25,70), vel:rand(-1.5,1.5), prev:50, hist:[], reason:'', reasonWk:0}));
+}
+function trendDef(id){ return TRENDS_DEF.find(t=>t.id===id); }
+function trendState(t){
+  if(t.vel>1.5) return ['Rising','var(--green)'];
+  if(t.vel<-1.5) return ['Declining','var(--red)'];
+  if(t.pop>=70) return ['Peaking','var(--gold)'];
+  if(t.pop<30) return ['Fading','var(--dim)'];
+  return ['Steady','var(--dim)'];
+}
+// Forecast is honest but noisy; research sharpens the lens.
+function trendForecast(t){
+  const noise = G.research.trendlab? 3 : G.research.forecasting? 8 : 16;
+  return clamp(Math.round(t.pop + t.vel*4 + rand(-noise, noise)), 0, 100);
+}
+
+/* Weekly evolution: seasons pull, momentum decays, nothing peaks forever. */
+function tickTrends(){
+  if(!G.trends || !G.trends.length) initTrends();
+  const s = season();
+  G.trends.forEach(t=>{
+    const def = trendDef(t.id);
+    t.prev = t.pop;
+    const seasonPull = (def.season && def.season[s.id]) || 0;
+    t.vel = clamp(t.vel*0.8 + rand(-1.6,1.6) + seasonPull - (t.pop-50)*0.035, -6, 6);
+    // breakout & collapse moments come with a story attached
+    if(Math.random()<0.05){
+      const up = Math.random()<0.5;
+      t.vel += up? rand(2.5,5) : -rand(2.5,5);
+      t.reason = (up? 'rising on ' : 'falling after ') + pick(up? RISE_REASONS : FALL_REASONS);
+      t.reasonWk = G.week;
+    }
+    t.pop = clamp(t.pop + t.vel, 3, 97);
+    t.hist = t.hist||[]; t.hist.push(Math.round(t.pop));
+    if(t.hist.length>16) t.hist.shift();
+  });
+  // industry news reflects the sim: report the week's biggest movers
+  const sorted = G.trends.slice().sort((a,b)=>(b.pop-b.prev)-(a.pop-a.prev));
+  const up = sorted[0], down = sorted[sorted.length-1];
+  if(Math.random()<0.6){
+    if(up.pop-up.prev>2) feedPost('press','TREND DESK', `${trendDef(up.id).name} climbing fast${up.reason && up.reasonWk>=G.week-2? ' — '+up.reason : ''}. Now at ${Math.round(up.pop)}/100 heat.`);
+    else if(down.prev-down.pop>2) feedPost('press','TREND DESK', `${trendDef(down.id).name} losing momentum${down.reason && down.reasonWk>=G.week-2? ' — '+down.reason : ''}. Down to ${Math.round(down.pop)}/100.`);
+  }
+}
+
+/* How much do current trends, the season and fatigue like THIS drop?
+   Returns a demand multiplier plus explainable factors.              */
+function trendBonusFor(col){
+  const factors = [];
+  let mult = 1;
+  (G.trends||[]).forEach(t=>{
+    const m = trendDef(t.id).match(col);
+    if(m<0.3) return;
+    const eff = (t.pop-50)/50 * 0.35 * m;
+    if(Math.abs(eff)>=0.03){ mult += eff; factors.push([trendDef(t.id).name, eff, t.pop]); }
+  });
+  const s = season();
+  const pm = (s.prod[col.product]||1);
+  if(pm!==1){ mult *= pm; factors.push([s.name+' demand for '+PRODUCTS.find(p=>p.id===col.product).name.toLowerCase()+'s', pm-1, null]); }
+  if(s.spend!==1){ mult *= s.spend; factors.push([s.name+' spending mood', s.spend-1, null]); }
+  const f = productFatigue(col);
+  if(f>0.03){ mult *= (1-f); factors.push(['Product fatigue — too similar to recent drops', -f, null]); }
+  return {mult: clamp(mult, 0.35, 2.1), factors, fatigue:f};
+}
+
+/* Fatigue: how much does this design repeat the last few drops? */
+function productFatigue(col){
+  const recent = G.drops.slice(-4).filter(d=>d.attrs);
+  if(recent.length<2) return 0;
+  const avgSim = recent.reduce((a,d)=>{
+    let m = 0;
+    if(d.attrs.product===col.product) m++;
+    if(d.attrs.palette===col.palette) m++;
+    if(d.attrs.fit===col.fit) m++;
+    if(d.attrs.graphics===col.graphics) m++;
+    if(d.attrs.logo===col.logo) m++;
+    if(d.theme===col.theme) m++;
+    return a + m/6;
+  }, 0) / recent.length;
+  return clamp((avgSim-0.5)*1.1, 0, 0.45);
+}
+
+/* Customer tastes drift a little every week; extremes make the news. */
+function tickSegPrefs(){
+  G.segPrefs = G.segPrefs||{};
+  SEGMENTS.forEach(sg=>{
+    const p = G.segPrefs[sg.id] = G.segPrefs[sg.id]||{q:1, price:1, pack:1};
+    p.q     = clamp(p.q     + rand(-0.012,0.012), 0.75, 1.3);
+    p.price = clamp(p.price + rand(-0.012,0.012), 0.75, 1.3);
+    p.pack  = clamp(p.pack  + rand(-0.012,0.012), 0.75, 1.3);
+  });
+  if(Math.random()<0.10){
+    const lines = [];
+    SEGMENTS.forEach(sg=>{
+      const p = G.segPrefs[sg.id];
+      if(p.q>1.18)     lines.push(`${sg.name} are scrutinising quality more than ever.`);
+      if(p.q<0.85)     lines.push(`${sg.name} are shopping with their eyes, not their hands, lately.`);
+      if(p.price>1.18) lines.push(`${sg.name} have become noticeably price-sensitive.`);
+      if(p.price<0.85) lines.push(`${sg.name} are spending freely right now.`);
+      if(p.pack>1.18)  lines.push(`${sg.name} keep posting unboxings — packaging matters to them right now.`);
+    });
+    if(lines.length) feedPost('press','MARKET PULSE', pick(lines));
+  }
+}
+
 /* ---------------- customer segments ----------------
    Each segment is a share of your reachable audience and
    scores a collection differently. All scores ~0.2–1.6.   */
@@ -35,15 +170,20 @@ function segmentInterest(seg, col, price){
     if(o && o.mod && o.mod[seg.id]) s += o.mod[seg.id];
   });
 
-  // Quality matters to everyone, but most to collectors/luxury/enthusiasts
+  // Quality matters to everyone, but most to collectors/luxury/enthusiasts —
+  // and each segment's current taste (segPrefs) scales how much they care
+  const pref = (G.segPrefs && G.segPrefs[seg.id]) || {q:1, price:1, pack:1};
   const qWeight = {collector:.09, luxury:.10, enthusiast:.07, street:.045, casual:.03}[seg.id];
-  s += (col.quality-5) * qWeight;
+  s += (col.quality-5) * qWeight * pref.q;
 
   // Price sensitivity: casuals hate markups, luxury reads cheap as cheap
   const ratio = price / prod.retail;
-  if(seg.id==='casual')     s -= Math.max(0,(ratio-1))*0.9;
+  if(seg.id==='casual')     s -= Math.max(0,(ratio-1))*0.9*pref.price;
   else if(seg.id==='luxury')s += clamp((ratio-1)*0.35, -0.3, 0.35);
-  else                      s -= Math.max(0,(ratio-1.15))*0.55;
+  else                      s -= Math.max(0,(ratio-1.15))*0.55*pref.price;
+
+  // premium packaging matters more when a crowd is in an unboxing mood
+  if((seg.id==='luxury'||seg.id==='collector') && col.packaging!=='poly') s += (pref.pack-1)*0.3;
 
   // Trend alignment excites the hype-driven crowds
   if(col.theme===G.trend.theme)      s += (seg.id==='street'?0.2 : seg.id==='enthusiast'?0.12 : 0.05);
@@ -53,7 +193,8 @@ function segmentInterest(seg, col, price){
   s += (G.loyalty-50)/150 + (G.reputation-50)/220;
 
   // Brand DNA: the crowd you were built for finds you faster
-  s += (dna().seg[seg.id]||0);
+  // (blended during a reinvention — old fans fade, new ones arrive)
+  s += dnaSegBonus(seg.id);
 
   return clamp(s, 0.05, 1.7);
 }
@@ -76,6 +217,10 @@ function simulateDrop(col, qty, price, opts){
   const loyalCore = G.followers * 0.012 * (G.loyalty/100);
   genuineDemand += loyalCore;
   perSegment._loyal = Math.round(loyalCore);
+
+  // Living fashion: trends, season and fatigue reshape demand (explainably)
+  const tb = trendBonusFor(col);
+  genuineDemand *= tb.mult;
 
   // Difficulty & event modifiers (viral moment, competitor clash, etc.)
   genuineDemand *= diff().demand;
@@ -124,6 +269,7 @@ function simulateDrop(col, qty, price, opts){
     genuineDemand: Math.round(genuineDemand), resellerBuys,
     totalDemand, sold: finalSold, soldOut, selloutMin,
     resaleFinal, resellerShare, scarcity,
+    trendFactors: tb.factors, fatigue: tb.fatigue,
   };
 }
 
@@ -202,11 +348,33 @@ function personaOf(c){ return PERSONAS.find(p=>p.name===c.name) || PERSONAS[5]; 
 
 function tickCompetitors(){
   const rankBefore = competitorRank();
+  // every rival relates to trends in character
+  const trends = G.trends||[];
+  const riser  = trends.length? trends.reduce((a,b)=>b.vel>a.vel?b:a) : null;
+  const hot    = trends.length? trends.reduce((a,b)=>b.pop>a.pop?b:a) : null;
+  const tPop   = id => { const t=trends.find(x=>x.id===id); return t? t.pop : 50; };
   G.competitors.forEach(c=>{
     c.prevFollowers = c.followers;
     // gentle mean-reverting growth
     c.followers = Math.max(200, Math.round(c.followers * rand(0.96, 1.06) + c.prestige*3));
     c.prestige  = clamp(c.prestige + rand(-1.2, 1.4), 1, 99);
+    // trend behaviour by personality
+    if(riser){
+      if(c.name==='PAPER CROWN'){          // chases everything, boom or bust
+        if(riser.vel>2.5) c.followers += ri(300,1200);
+        else if(riser.vel<-2.5 || trends.some(t=>t.prev-t.pop>4)) c.followers = Math.max(200, c.followers - ri(300,1000));
+        if(Math.random()<0.08) feedPost('press','DROPFEED', `PAPER CROWN already has a ${trendDef(riser.id).name.toLowerCase()} collection out. Of course they do.`);
+      } else if(c.name==='NOVA'){          // only proven winners
+        if(hot && hot.pop>70 && Math.abs(hot.vel)<2) c.followers += ri(200,600);
+      } else if(c.name==='KITSUNE'){       // cautious, steady adoption
+        if(hot && hot.pop>62) { c.followers += ri(50,250); c.prestige = clamp(c.prestige+0.3,1,99); }
+      } else if(c.name==='OUTLAW'){        // lives and dies with skate culture
+        c.followers += Math.round((tPop('skate')-50)*ri(4,10));
+      } else if(c.name==='OBSIDIAN'){      // rides luxury sentiment
+        c.followers += Math.round((tPop('luxmat')-50)*ri(2,6));
+      }                                     // VOID ignores trends entirely — mystique is timeless
+    }
+    c.followers = Math.max(200, c.followers);
     // brands make moves that fit who they are
     if(Math.random()<0.28){
       const P = personaOf(c);
