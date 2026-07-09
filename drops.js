@@ -54,6 +54,7 @@ function finalizeDesign(){   // (kept name for compatibility — now "add to vau
   if(mat.research && !G.research[mat.research]){ toast('That material needs research'); return; }
   const cost = designCost(d);
   if(G.cash < cost){ toast('Sampling this design costs '+fmt$(cost)); return; }
+  if(!spendSlots(1)) return;   // designing takes real studio time
   if(!d.name.trim()){ d.name = randCollectionName(); }
   G.cash -= cost; G.weekLog.expenses += cost;
 
@@ -160,6 +161,7 @@ function runChannel(id){
   if(!ch || G.usedChannels[id]) return;
   if(ch.research && !G.research[ch.research]) return;
   if(G.cash < ch.cost){ toast('Not enough cash'); return; }
+  if(!spendSlots(1)) return;   // campaigns take a slot of the week
   G.cash -= ch.cost;
   G.weekLog.expenses += ch.cost;
   G.usedChannels[id] = true;
@@ -235,6 +237,7 @@ function launchDrop(){
   const prodCost = Math.round(col.unitCost * qty * (G.eventMods.nextDropCost||1));
   if(qty > productionCap()){ toast('Over your production capacity'); return; }
   if(G.cash < prodCost){ toast('Cannot afford this production run'); return; }
+  if(!spendSlots(2)) return;   // launch day consumes most of the week
 
   G.cash -= prodCost;
   G.weekLog.expenses += prodCost;

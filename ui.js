@@ -75,6 +75,7 @@ function renderTopbar(){
   $id('brandName').innerHTML = G.brand+' <span>●</span>';
   $id('kWeek').textContent = G.week;
   $id('kSeason').textContent = season().name + (season().id==='holiday'? ' 🎁':'');
+  $id('kSlots').textContent = '●'.repeat(slots()) + '○'.repeat(3-slots());
   $id('kCash').textContent = fmt$(G.cash);
   $id('kCash').className = 'k-value '+(G.cash<0?'k-neg':'k-pos');
   $id('kFollowers').textContent = fmtN(G.followers);
@@ -268,8 +269,9 @@ function renderStudio(){
     <div class="sub-stat">${trendNote||'&nbsp;'}</div>`;
   const dCost = designCost(d);
   $id('finalizeBtn').onclick = finalizeDesign;
-  $id('finalizeBtn').disabled = G.cash < dCost;
-  $id('finalizeBtn').textContent = `Add to Vault — ${fmt$(dCost)} sampling`;
+  $id('finalizeBtn').disabled = G.cash < dCost || slots()<1;
+  $id('finalizeBtn').textContent = slots()<1? '⏳ No time this week — advance to design'
+    : `Add to Vault — ${fmt$(dCost)} sampling · 1 slot`;
 
   // burnout readout lives with the design tools
   const bo = Math.round(G.burnout||0);
@@ -368,9 +370,10 @@ function renderDrop(){
 
   renderForecast(col);
   const prodCost = Math.round(col.unitCost*col.qty*(G.eventMods.nextDropCost||1));
-  $id('launchBtn').disabled = G.droppedThisWeek || G.cash<prodCost || col.qty>cap;
+  $id('launchBtn').disabled = G.droppedThisWeek || G.cash<prodCost || col.qty>cap || slots()<2;
   $id('launchBtn').textContent = G.droppedThisWeek? '✓ DROPPED THIS WEEK — ADVANCE TO NEXT'
-    : G.cash<prodCost? 'CANNOT AFFORD PRODUCTION' : '🚀 LAUNCH DROP';
+    : slots()<2? '⏳ A LAUNCH TAKES 2 SLOTS — NOT ENOUGH TIME LEFT'
+    : G.cash<prodCost? 'CANNOT AFFORD PRODUCTION' : '🚀 LAUNCH DROP · 2 SLOTS';
   $id('launchBtn').onclick = launchDrop;
 }
 
@@ -428,7 +431,7 @@ function renderMarketing(){
     b.className='row-item';
     b.innerHTML = `<div class="ri-main"><div class="ri-title">${ch.name}${locked?' 🔒':''}</div>
       <div class="ri-sub">${locked? 'Requires research: Community CRM' : ch.desc}</div></div>
-      <button class="mini-btn" ${locked||used||G.cash<ch.cost?'disabled':''}>${used?'✓ Done':(ch.cost?fmt$(ch.cost):'Free')}</button>`;
+      <button class="mini-btn" ${locked||used||G.cash<ch.cost||slots()<1?'disabled':''}>${used?'✓ Done':(ch.cost?fmt$(ch.cost):'Free')+' · 1 slot'}</button>`;
     if(!locked && !used) b.querySelector('button').onclick = ()=>runChannel(ch.id);
     $id('mktChannels').appendChild(b);
   });

@@ -38,6 +38,7 @@ function loadGame(){
     s.history.weekly = s.history.weekly || [];
     if(s.stats.lifetimeProfit===undefined) s.stats.lifetimeProfit = 0;
     // v1.4 migrations — design vault & collections
+    if(s.slots===undefined) s.slots = 3;
     s.vault = s.vault || [];
     s.colSel = s.colSel || [];
     s.colName = s.colName || '';

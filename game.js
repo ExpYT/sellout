@@ -212,6 +212,16 @@ function checkMilestones(){
   });
 }
 
+/* Time slots — the week only holds so much work (design 1, marketing 1, drop 2).
+   Hiring, research and upgrades are management: they cost money, not time.     */
+function slots(){ return G.slots===undefined? 3 : G.slots; }
+function spendSlots(n){
+  if(slots() < n){ toast('⏳ No time left this week — advance to next week'); return false; }
+  G.slots = slots() - n;
+  if(G.slots<=0) toast('Week fully used — advance when ready');
+  return true;
+}
+
 /* Collection awards — permanent honours, replaced only when beaten. */
 const AWARDS = [
   {id:'cohesive', name:'Most Cohesive',  val:r=> r.synergy>=80? r.synergy : null,                unit:'/100 synergy'},
@@ -302,6 +312,7 @@ function newGame(brand, difficulty, dnaId){
     tut: {},             // tutorial steps already shown
     botStreak: 0,        // consecutive drops lost to resellers
     milestones: {},      // milestone id -> week earned
+    slots: 3,            // weekly time slots: design=1, marketing=1, drop=2
     vault: [],           // v1.4 design vault — pieces awaiting release
     colSel: [], colName:'', colRevealed:false,
     burnout: 0, designsThisWeek: 0,
@@ -354,7 +365,8 @@ function advanceWeek(){
 
   // 2. Hype fades, community drifts back toward neutral
   // (a community manager actively rebuilds loyalty every week)
-  G.hype = clamp(G.hype*0.72 - 1, 0, 100);
+  // decay softened slightly since time slots cap weekly marketing
+  G.hype = clamp(G.hype*0.78 - 1, 0, 100);
   G.loyalty = clamp(G.loyalty + (50-G.loyalty)*0.04 + empBonus('community')*2.5, 0, 100);
   G.satisfaction+= (60-G.satisfaction)*0.05;
   G.reputation  += (50-G.reputation)*0.02;
@@ -405,6 +417,7 @@ function advanceWeek(){
 
   // 9. Reset weekly counters + record history for the analytics charts
   G.week++;
+  G.slots = 3;
   G.droppedThisWeek = false;
   G.usedChannels = {};
   G.eventMods = {};
