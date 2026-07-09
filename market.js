@@ -222,6 +222,9 @@ function simulateDrop(col, qty, price, opts){
   const tb = trendBonusFor(col);
   genuineDemand *= tb.mult;
 
+  // v1.4: more pieces = more reasons to buy; capsules run hotter on resale
+  genuineDemand *= 1 + Math.min(0.8, ((col.pieces||1)-1)*0.10);
+
   // Difficulty & event modifiers (viral moment, competitor clash, etc.)
   genuineDemand *= diff().demand;
   genuineDemand *= (G.eventMods.demandMult || 1);
@@ -231,7 +234,7 @@ function simulateDrop(col, qty, price, opts){
 
   // Resellers smell margin: they join when expected resale clears retail comfortably
   const scarcity   = genuineDemand / Math.max(1, qty);
-  let resaleEst    = price * Math.pow(Math.max(0.3, scarcity), 0.75) * (0.75 + G.prestige/160);
+  let resaleEst    = price * Math.pow(Math.max(0.3, scarcity), 0.75) * (0.75 + G.prestige/160) * (col.capsule? 1.25:1);
   let resellerBuys = 0;
   if(resaleEst > price*1.25){
     let resellerPool = reach * 0.085 * clamp((resaleEst/price - 1), 0.2, 2.2);
@@ -381,7 +384,18 @@ function tickCompetitors(){
       // weighted pick from the persona's move table
       let roll = Math.random(), move = 'drop', acc = 0;
       for(const [m,w] of Object.entries(P.moves)){ acc += w; if(roll<=acc){ move = m; break; } }
-      if(move==='drop'){
+      if(move==='drop' && Math.random()<0.3){
+        // rivals manage design vaults too: delays, scraps, splits, rushes
+        const vm = pick([
+          [`${c.name} delayed their upcoming collection indefinitely. "When it's ready," they posted.`, 0, 0.5],
+          [`${c.name} reportedly scrapped an entire finished collection days before launch. Perfectionism or panic?`, -ri(50,300), 0],
+          [`${c.name} split their seasonal line into three tiny capsules. Scarcity theatre at its finest.`, ri(200,700), 0.8],
+          [`${c.name} rushed an unfinished drop out the door. The stitching reviews are not kind.`, -ri(200,800), -2],
+        ]);
+        feedPost('press', 'DROPFEED', vm[0]);
+        c.followers = Math.max(200, c.followers + vm[1]);
+        c.prestige = clamp(c.prestige + vm[2], 1, 99);
+      } else if(move==='drop'){
         feedPost('press', 'DROPFEED', P.lines.drop);
         c.followers += c.name==='NOVA'? ri(600,1600) : c.name==='VOID'? ri(50,200) : ri(200,900);
         c.prestige = clamp(c.prestige + (c.name==='VOID'||c.name==='OBSIDIAN'? 1.5 : 0.7), 1, 99);

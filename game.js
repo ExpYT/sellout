@@ -212,6 +212,28 @@ function checkMilestones(){
   });
 }
 
+/* Collection awards — permanent honours, replaced only when beaten. */
+const AWARDS = [
+  {id:'cohesive', name:'Most Cohesive',  val:r=> r.synergy>=80? r.synergy : null,                unit:'/100 synergy'},
+  {id:'original', name:'Most Original',  val:r=> (r.originality||0)>=7.5? r.originality : null,  unit:'/10 originality'},
+  {id:'capsule',  name:'Best Capsule',   val:r=> r.pieces<=2 && r.review && r.review.overall>=75? r.review.overall : null, unit:'/100'},
+  {id:'design',   name:'Best Design',    val:r=> r.review && r.review.scores.design>=8? r.review.scores.design : null, unit:'/10 design'},
+  {id:'resale',   name:'Highest Resale', val:r=> r.soldOut && r.resale>r.price*1.8? r.resale : null, unit:'resale'},
+];
+function checkAwards(rec){
+  G.awards = G.awards||{};
+  AWARDS.forEach(a=>{
+    const v = a.val(rec);
+    if(v===null || v===undefined) return;
+    const cur = G.awards[a.id];
+    if(!cur || v>cur.value){
+      G.awards[a.id] = {value:+(+v).toFixed(1), drop:rec.name, week:rec.week};
+      toast(`🏅 AWARD: ${a.name} — "${rec.name}"`, 'gold');
+      feedPost('press','THE RECORD', `"${rec.name}" takes ${G.brand}'s in-house honour for ${a.name}.`);
+    }
+  });
+}
+
 /* Dynamic brand personality — read from how you actually play.
    Recomputed from the last 6 drops; evolves as behaviour changes. */
 function brandPersonality(){
@@ -280,6 +302,10 @@ function newGame(brand, difficulty, dnaId){
     tut: {},             // tutorial steps already shown
     botStreak: 0,        // consecutive drops lost to resellers
     milestones: {},      // milestone id -> week earned
+    vault: [],           // v1.4 design vault — pieces awaiting release
+    colSel: [], colName:'', colRevealed:false,
+    burnout: 0, designsThisWeek: 0,
+    awards: {},          // collection honours
     trends: [],          // living trend engine (filled by initTrends)
     segPrefs: {},        // evolving customer tastes
     evolution: [],       // brand story timeline
@@ -354,6 +380,18 @@ function advanceWeek(){
   tickTrends();
   tickSegPrefs();
   tickReinvention();
+
+  // 8b. The studio breathes: burnout recovers, vault pieces age
+  G.designsThisWeek = 0;
+  G.burnout = clamp((G.burnout||0) - 6 - empBonus('designer')*2, 0, 100);
+  (G.vault||[]).forEach(v=>{
+    v.age++;
+    if(!v.timeless && v.age>6){
+      v.quality = Math.max(1, +(v.quality-0.06).toFixed(2));
+      if(v.age===9) feedPost('sys', null, `"${v.name}" has been sitting in the vault for ${v.age} weeks. It's starting to feel dated.`);
+    }
+    if(v.timeless && v.age===9) feedPost('sys', null, `"${v.name}" has aged beautifully in the vault. A future classic, whenever you're ready.`);
+  });
   // micro-trend (theme/product flavour) still rotates underneath
   if(Math.random()<0.4){
     G.trend = {theme: pick(THEMES), product: pick(PRODUCTS).id};

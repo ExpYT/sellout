@@ -58,10 +58,10 @@ function renderTut(){
   const b = $id('tutBanner');
   if(!G || G.week>3 || G.tut.done){ b.style.display='none'; return; }
   let msg;
-  if(G.drops.length===0 && !G.readyDrop && !G.droppedThisWeek)
-    msg = '👋 <b>Step 1 —</b> Open the <b>Design Studio</b>, name a collection, pick its look and materials, then <b>Finalize</b>. Every choice courts a different crowd (hover options for hints).';
-  else if(G.readyDrop)
-    msg = '🔥 <b>Step 2 —</b> Build hype in <b>Marketing</b> (the free Social Post is a start), then set <b>quantity & price</b> in the Drop tab. Producing <i>less</i> than demand = sellout, resale heat, prestige. Launch when ready.';
+  if(G.drops.length===0 && !(G.vault||[]).length && !G.droppedThisWeek)
+    msg = '👋 <b>Step 1 —</b> Open the <b>Design Studio</b> and design a piece — pick its look and materials, then <b>Add to Vault</b>. Designs wait in your vault until you\'re ready to release them.';
+  else if((G.vault||[]).length && G.drops.length===0)
+    msg = '🔥 <b>Step 2 —</b> On the <b>Drop</b> page, select vault pieces to assemble a collection (1–2 = exclusive capsule), build hype in <b>Marketing</b>, set quantity & price, and launch. Undersupply = sellout = prestige.';
   else if(G.droppedThisWeek)
     msg = '📊 <b>Step 3 —</b> Drop done — read the breakdown to see <i>why</i> it went that way. Then hit <b>Advance Week ▸</b>: bills get paid, hype fades, the scene reacts.';
   else
@@ -146,7 +146,11 @@ function renderDashboard(){
     recRow('Average critic rating', avgRating && avgRating+'/100') +
     recRow('Highest resale', topResale && (topResale.resaleNow||topResale.resale)>topResale.price? `${topResale.name} — ${fmt$(topResale.resaleNow||topResale.resale)}` : null) +
     recRow('Best marketing campaign', G.stats.bestCampaign && `${G.stats.bestCampaign.name} — +${G.stats.bestCampaign.gain} hype (wk ${G.stats.bestCampaign.week})`) +
-    recRow('Largest loss', worst && worst.profit<0? `${worst.name} — ${fmt$(worst.profit)}` : null) ||
+    recRow('Largest loss', worst && worst.profit<0? `${worst.name} — ${fmt$(worst.profit)}` : null) +
+    Object.entries(G.awards||{}).map(([id,a])=>{
+      const def = AWARDS.find(x=>x.id===id);
+      return def? recRow('🏅 '+def.name, `"${a.drop}" — ${a.value} ${def.unit} (wk ${a.week})`) : '';
+    }).join('') ||
     '<div class="sub-stat">Records are written by drops. Go make some.</div>';
 
   // milestones
@@ -262,22 +266,75 @@ function renderStudio(){
     <div class="sub-stat" style="margin-top:8px">Unit cost <b style="color:var(--txt)">${fmt$(unit)}</b> · suggested retail ${fmt$(prod.retail)}</div>
     <div class="sub-stat">Expected quality <b style="color:var(--gold)">~${qHint.toFixed(1)}/10</b>${empBonus('designer')>0? ' (designer boosted)':''}</div>
     <div class="sub-stat">${trendNote||'&nbsp;'}</div>`;
+  const dCost = designCost(d);
   $id('finalizeBtn').onclick = finalizeDesign;
-  $id('finalizeBtn').disabled = !!G.readyDrop;
-  $id('finalizeBtn').textContent = G.readyDrop? 'A drop is already staged — launch or rework it' : 'Finalize Design → Drop Setup';
+  $id('finalizeBtn').disabled = G.cash < dCost;
+  $id('finalizeBtn').textContent = `Add to Vault — ${fmt$(dCost)} sampling`;
 
+  // burnout readout lives with the design tools
+  const bo = Math.round(G.burnout||0);
+  const boCol = bo>=70?'var(--red)':bo>=40?'var(--gold)':'var(--green)';
+  $id('designPreview').innerHTML += `
+    <div class="meter-row" style="margin-top:10px" title="Designing tires the studio; repetition tires it faster. Rest weeks, designers and the Creative Process Studio recover it. High burnout drags quality and originality down.">
+      <div class="m-head"><span>Creative burnout</span><b style="color:${boCol}">${bo}%</b></div>
+      <div class="meter ${bo>=70?'red':bo>=40?'gold':'green'}"><div style="width:${bo}%"></div></div></div>`;
+
+  // vault
+  const vaultBox = $id('vaultList');
+  if(vaultBox){
+    vaultBox.innerHTML = (G.vault||[]).slice().reverse().map(v=>{
+      const fit = trendBonusFor(v);
+      const ageTag = v.timeless? (v.age>8?'<span style="color:var(--gold)">CLASSIC</span>':'<span style="color:var(--gold)">timeless</span>')
+        : v.age>8? '<span style="color:var(--red)">going stale</span>' : v.age>4? '<span style="color:var(--dim)">settling</span>' : '<span style="color:var(--green)">fresh</span>';
+      return `<div class="row-item" style="padding:8px 12px"><div class="ri-main">
+        <div class="ri-title" style="font-size:12.5px">${v.name} <span style="color:var(--dim);font-weight:400">· ${PRODUCTS.find(p=>p.id===v.product).name}</span></div>
+        <div class="ri-sub">q ${v.quality} · orig ${v.originality} · ${ageTag} (wk ${v.age}) · climate ${fit.mult>=1.05?'<span style="color:var(--green)">+'+Math.round((fit.mult-1)*100)+'%</span>':fit.mult<=0.95?'<span style="color:var(--red)">'+Math.round((fit.mult-1)*100)+'%</span>':'neutral'}</div></div>
+        <button class="mini-btn" data-scrap="${v.id}" title="Scrap this design (no refund)">✕</button></div>`;
+    }).join('') || '<div class="sub-stat">Empty. Design something — releases are assembled from vault pieces now.</div>';
+    vaultBox.querySelectorAll('[data-scrap]').forEach(b=>{
+      b.onclick = ()=>{ G.vault = G.vault.filter(v=>v.id!=+b.dataset.scrap && String(v.id)!==b.dataset.scrap); G.colSel=(G.colSel||[]).filter(id=>String(id)!==b.dataset.scrap && id!=+b.dataset.scrap); saveGame(); renderAll(); };
+    });
+  }
+
+  // creative calendar: where are we in the year, what's coming, what's rising
+  const sNow = season();
+  const idx = SEASONS.indexOf(sNow);
+  const sNext = SEASONS[(idx+1)%SEASONS.length];
+  const weeksLeft = sNow.to - ((G.week-1)%52) + 1;
+  const risers = (G.trends||[]).filter(t=>t.vel>1.2).sort((a,b)=>b.vel-a.vel).slice(0,2);
   $id('trendReport').innerHTML = `
-    <div class="row-item"><div class="ri-main"><div class="ri-title">🔥 "${G.trend.theme}"</div><div class="ri-sub">the theme the scene wants right now</div></div></div>
-    <div class="row-item"><div class="ri-main"><div class="ri-title">📈 ${PRODUCTS.find(p=>p.id===G.trend.product).name}s</div><div class="ri-sub">the product category having a moment</div></div></div>
-    <div class="sub-stat" style="margin-top:8px">Chasing trends excites streetwear fans & casuals. Ignoring them and building your own lane earns prestige slower — but repeat themes bore the fashion crowd either way.</div>`;
+    <div class="row-item" style="padding:8px 12px"><div class="ri-main"><div class="ri-title" style="font-size:12.5px">Now: ${sNow.name} <span style="color:var(--dim);font-weight:400">· ${weeksLeft} wk${weeksLeft>1?'s':''} left</span></div>
+      <div class="ri-sub">then ${sNext.name} — ${sNext.blurb.toLowerCase()}</div></div></div>
+    ${risers.map(t=>`<div class="row-item" style="padding:8px 12px"><div class="ri-main"><div class="ri-title" style="font-size:12.5px;color:var(--green)">▲ ${trendDef(t.id).name}</div><div class="ri-sub">rising — forecast ~${trendForecast(t)}/100. Design for it now, drop into the peak.</div></div></div>`).join('')}
+    <div class="row-item" style="padding:8px 12px"><div class="ri-main"><div class="ri-title" style="font-size:12.5px">Vault: ${(G.vault||[]).length} piece${(G.vault||[]).length===1?'':'s'} ready</div>
+      <div class="ri-sub">🔥 micro-trend: "${G.trend.theme}" themes, ${PRODUCTS.find(p=>p.id===G.trend.product).name.toLowerCase()}s</div></div></div>
+    <div class="sub-stat" style="margin-top:6px">Think ahead: design during quiet weeks, release into the right season and trend window.</div>`;
 }
 
 /* ---------------- drop config ---------------- */
 function renderDrop(){
+  buildReadyDrop();   // assemble the virtual collection from vault selection
   const col = G.readyDrop;
+
+  // --- the Creative Director's table: pick vault pieces ---
+  const picker = (G.vault||[]).map(v=>{
+    const on = (G.colSel||[]).some(id=>String(id)===String(v.id));
+    return `<button class="opt ${on?'sel':''}" data-pick="${v.id}" style="text-align:left">${v.name}<small>${PRODUCTS.find(p=>p.id===v.product).name} · q${v.quality}${v.timeless?' · ⭐':''}</small></button>`;
+  }).join('') || '<div class="sub-stat">The vault is empty — design pieces in the Studio first.</div>';
+  const synCol = col? (col.synergy>=70?'var(--green)':col.synergy>=45?'var(--gold)':'var(--red)') : 'var(--dim)';
+  const builderHtml = `
+    <div class="field"><label>Collection Name</label>
+      <input id="colNameInput" type="text" maxlength="26" placeholder="auto-named if blank" value="${(G.colName||'').replace(/"/g,'&quot;')}" spellcheck="false"></div>
+    <div class="field"><label>Pieces from the Vault (${(G.colSel||[]).length} selected)</label>
+      <div class="opt-row">${picker}</div></div>
+    ${col? `<div class="row-item"><div class="ri-main">
+        <div class="ri-title">${col.name} <span style="color:var(--dim);font-weight:400">· ${sizeLabel(col.pieces)}</span></div>
+        <div class="ri-sub">quality ${col.quality}/10 · synergy <b style="color:${synCol}">${col.synergy}/100</b> — ${col.synergy>=80?'a real collection':col.synergy>=45?'loosely related':'a merch dump, critics will say'}</div></div>
+        <button class="mini-btn" id="revealBtn" ${G.colRevealed?'disabled':''}>${G.colRevealed?'✓ Revealed':'📣 Reveal (pre-hype)'}</button></div>` : ''}`;
   if(!col){
-    $id('dropConfig').innerHTML = '<div class="sub-stat">No collection staged. Finalize a design in the Studio first.</div>';
-    $id('dropForecast').innerHTML = '<div class="sub-stat">—</div>';
+    $id('dropConfig').innerHTML = builderHtml;
+    bindBuilder();
+    $id('dropForecast').innerHTML = '<div class="sub-stat">Select at least one vault piece to configure the launch. Capsules (1–2) build prestige & resale; big lines (7+) are events — costly, but huge.</div>';
     $id('launchBtn').style.display='none';
     return;
   }
@@ -290,10 +347,7 @@ function renderDrop(){
   const limits = [['none','No Limit'],['soft','2 Per Customer'],['strict','1 Per Customer']]
     .map(([id,n])=>`<button class="opt ${col.limit===id?'sel':''}" data-limit="${id}">${n}</button>`).join('');
 
-  $id('dropConfig').innerHTML = `
-    <div class="row-item"><div class="ri-main"><div class="ri-title">${col.name}</div>
-      <div class="ri-sub">${col.productObj.name} · ${col.theme} · quality ${col.quality}/10</div></div>
-      <button class="mini-btn" id="reworkBtn">Rework</button></div>
+  $id('dropConfig').innerHTML = builderHtml + `
     <div class="field"><label>Production Quantity</label><div class="opt-row">${qtyBtns}</div></div>
     <div class="field"><label>Retail Price</label>
       <div class="range-row"><input type="range" id="priceRange" min="${Math.round(col.productObj.retail*0.6)}" max="${Math.round(col.productObj.retail*2.5)}" step="1" value="${col.price}">
@@ -310,7 +364,7 @@ function renderDrop(){
   });
   const pr = $id('priceRange');
   pr.oninput = ()=>{ col.price=+pr.value; $id('priceVal').textContent=fmt$(col.price); renderForecast(col); };
-  $id('reworkBtn').onclick = ()=>{ G.design = {...col}; G.readyDrop=null; saveGame(); gotoPage('studio'); };
+  bindBuilder();
 
   renderForecast(col);
   const prodCost = Math.round(col.unitCost*col.qty*(G.eventMods.nextDropCost||1));
@@ -318,6 +372,27 @@ function renderDrop(){
   $id('launchBtn').textContent = G.droppedThisWeek? '✓ DROPPED THIS WEEK — ADVANCE TO NEXT'
     : G.cash<prodCost? 'CANNOT AFFORD PRODUCTION' : '🚀 LAUNCH DROP';
   $id('launchBtn').onclick = launchDrop;
+}
+
+/* Collection-builder interactions: pick pieces, name it, reveal it. */
+function bindBuilder(){
+  const ni = $id('colNameInput');
+  if(ni){
+    ni.oninput = ()=>{ G.colName = ni.value; };
+    ni.onchange = ()=>{ saveGame(); renderDrop(); };
+  }
+  document.querySelectorAll('[data-pick]').forEach(b=>{
+    b.onclick = ()=>{
+      const id = b.dataset.pick;
+      G.colSel = G.colSel||[];
+      if(G.colSel.some(x=>String(x)===id)) G.colSel = G.colSel.filter(x=>String(x)!==id);
+      else G.colSel.push(id);
+      G.colRevealed = false;   // changing the lineup resets the reveal
+      saveGame(); renderDrop();
+    };
+  });
+  const rb = $id('revealBtn');
+  if(rb && !G.colRevealed) rb.onclick = revealCollection;
 }
 
 function renderForecast(col){
@@ -558,7 +633,11 @@ function showArchiveCard(d){
     line('Best crowd', d.bestSeg) +
     line('Weakest crowd', d.worstSeg) +
     line('Biggest success', d.topGood) +
-    line('Biggest weakness', d.topBad),
+    line('Biggest weakness', d.topBad) +
+    (d.pieces? line('Format', `${d.sizeType||''} · ${d.pieces} piece${d.pieces>1?'s':''} · synergy ${d.synergy}/100`) : '') +
+    (d.items && d.items.length? `<div style="margin-top:10px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">The pieces</div>`+
+      d.items.map(i=>`<div style="font-size:12px;padding:3px 0">• ${i.name} <span style="color:var(--dim)">— ${i.product}, q${i.quality}${i.timeless?' ⭐ timeless':''}</span></div>`).join('') : '') +
+    (d.story? `<div style="margin-top:10px;font-size:12px;color:var(--dim);font-style:italic">${d.story}</div>` : ''),
     [{label:'CLOSE', cls:'primary', fn:null}]);
 }
 

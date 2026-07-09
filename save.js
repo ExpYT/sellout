@@ -37,6 +37,15 @@ function loadGame(){
     s.milestones   = s.milestones   || {};
     s.history.weekly = s.history.weekly || [];
     if(s.stats.lifetimeProfit===undefined) s.stats.lifetimeProfit = 0;
+    // v1.4 migrations — design vault & collections
+    s.vault = s.vault || [];
+    s.colSel = s.colSel || [];
+    s.colName = s.colName || '';
+    s.colRevealed = s.colRevealed || false;
+    s.burnout = s.burnout || 0;
+    s.designsThisWeek = s.designsThisWeek || 0;
+    s.awards = s.awards || {};
+    if(s.readyDrop && !s.readyDrop.items) s.readyDrop = null;  // pre-vault staged drop can't migrate
     // v1.3 migrations — the living fashion industry
     s.segPrefs    = s.segPrefs    || {};
     s.evolution   = s.evolution   || [];

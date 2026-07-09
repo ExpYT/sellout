@@ -34,37 +34,112 @@ function designQualityBase(d){
   return clamp(q, 1, 9.2);
 }
 
-// Finalize the studio design into a launch-ready collection object.
-function finalizeDesign(){
+/* ============ v1.4 DESIGN VAULT ============
+   Designing and releasing are now separate crafts. Each design
+   becomes a vault piece with its own soul — quality, originality,
+   timelessness — waiting for the right collection.              */
+function designCost(d){ return Math.round(100 + designUnitCost(d)*8); }
+
+// How similar is this design to your last few? Feeds burnout + originality.
+function designSimilarity(d){
+  const recent = G.vault.slice(-3).concat(G.drops.slice(-2).map(x=>x.attrs||{}));
+  if(!recent.length) return 0;
+  return recent.reduce((a,r)=>a + ((r.product===d.product)+(r.palette===d.palette)+(r.graphics===d.graphics))/3, 0)/recent.length;
+}
+
+function finalizeDesign(){   // (kept name for compatibility — now "add to vault")
   const d = G.design;
   if(!d) return;
-  if(!d.name.trim()){ d.name = randCollectionName(); toast('Unnamed — the studio christened it '+d.name); }
   const mat = MATERIALS.find(m=>m.id===d.material);
   if(mat.research && !G.research[mat.research]){ toast('That material needs research'); return; }
+  const cost = designCost(d);
+  if(G.cash < cost){ toast('Sampling this design costs '+fmt$(cost)); return; }
+  if(!d.name.trim()){ d.name = randCollectionName(); }
+  G.cash -= cost; G.weekLog.expenses += cost;
 
-  const quality = clamp(designQualityBase(d) + rand(-0.7, 0.9) + (G.eventMods.qualityBonus||0), 1, 10);
+  const sim = designSimilarity(d);
+  const originality = clamp(4 + rand(0,3) + empBonus('designer')*2 - sim*3 - (G.burnout||0)/30, 1, 10);
+  const quality = clamp(designQualityBase(d) + rand(-0.7,0.9) + (G.eventMods.qualityBonus||0) - (G.burnout||0)/25, 1, 10);
   if(G.eventMods.qualityBonus) delete G.eventMods.qualityBonus;
-  // Repeating last theme bores the fashion crowd
-  const lastDrop = G.drops[G.drops.length-1];
-  const staleTheme = lastDrop && lastDrop.theme===d.theme;
+  const timeless = Math.random() < 0.08 + (originality>=7.5?0.22:0) + (d.graphics==='minimal'?0.08:0);
 
-  G.readyDrop = {
-    ...d,
-    name: d.name.trim().toUpperCase(),
-    quality: +quality.toFixed(1),
-    staleTheme,
-    unitCost: designUnitCost(d),
-    productObj:  PRODUCTS.find(p=>p.id===d.product),
-    paletteObj:  PALETTES.find(p=>p.id===d.palette),
-    logoObj:     LOGOS.find(l=>l.id===d.logo),
-    graphicsObj: GRAPHICS.find(g=>g.id===d.graphics),
-    fitObj:      FITS.find(f=>f.id===d.fit),
-    packagingObj:PACKAGING.find(p=>p.id===d.packaging),
-    qty: 250, price: PRODUCTS.find(p=>p.id===d.product).retail, limit:'none',
-  };
+  // creative burnout: designing costs energy, repetition costs more
+  G.designsThisWeek = (G.designsThisWeek||0)+1;
+  let strain = 7 + (G.designsThisWeek-1)*5 + (sim>0.5?6:0) - (G.research.creative?3:0);
+  G.burnout = clamp((G.burnout||0) + Math.max(3,strain), 0, 100);
+
+  G.vault.push({
+    id: Date.now()+Math.random(), name: d.name.trim().toUpperCase(),
+    product:d.product, theme:d.theme, palette:d.palette, logo:d.logo,
+    graphics:d.graphics, fit:d.fit, material:d.material, packaging:d.packaging,
+    quality:+quality.toFixed(1), originality:+originality.toFixed(1), timeless,
+    age:0, week:G.week, unitCost:designUnitCost(d),
+  });
+  toast(`"${d.name.toUpperCase()}" added to the vault${timeless?' — this one feels TIMELESS':''}`, timeless?'gold':undefined);
+  if(G.burnout>=70) toast('⚠ Creative burnout high — quality is suffering. Rest or vary your work.');
   G.design = null;
-  toast('Design finalized — configure the drop');
-  gotoPage('drop');
+  saveGame(); renderAll();
+}
+
+/* ---------- collection assembly ----------
+   Selected vault pieces + a name become a launch-ready collection.
+   Synergy is the Creative Director's score: do these belong together? */
+function synergyOf(items){
+  if(items.length<2) return 70;   // a capsule is coherent by definition
+  let pairs=0, score=0;
+  for(let i=0;i<items.length;i++) for(let j=i+1;j<items.length;j++){
+    const a=items[i], b=items[j]; pairs++;
+    score += ((a.palette===b.palette)+(a.theme===b.theme)+(a.fit===b.fit)+(a.graphics===b.graphics)+(a.logo===b.logo))/5;
+  }
+  return Math.round(score/pairs*100);
+}
+function sizeLabel(n){ return n<=2?'Capsule':n<=6?'Collection':n<=9?'Seasonal Collection':'Mega Collection'; }
+
+function buildReadyDrop(){
+  const items = G.vault.filter(v=>(G.colSel||[]).some(id=>String(id)===String(v.id)));
+  if(!items.length){ G.readyDrop=null; return; }
+  const syn = synergyOf(items);
+  const avg = f=>items.reduce((a,i)=>a+f(i),0)/items.length;
+  const lead = items[0];
+  const dominant = k=>{ const c={}; items.forEach(i=>c[i[k]]=(c[i[k]]||0)+1); return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0]; };
+  const name = (G.colName||'').trim().toUpperCase() || randCollectionName()+' '+(items.length<=2?'CAPSULE':'COLLECTION');
+  const quality = clamp(avg(i=>i.quality) + (syn-50)/50*1.2, 1, 10);
+  const lastDrop = G.drops[G.drops.length-1];
+  G.readyDrop = {
+    items, pieces:items.length, synergy:syn, capsule:items.length<=2,
+    originality:+avg(i=>i.originality).toFixed(1),
+    name, theme:dominant('theme'), product:dominant('product'), palette:dominant('palette'),
+    logo:dominant('logo'), graphics:dominant('graphics'), fit:dominant('fit'),
+    material:dominant('material'), packaging:dominant('packaging'),
+    quality:+quality.toFixed(1),
+    staleTheme: lastDrop && lastDrop.theme===dominant('theme'),
+    unitCost: avg(i=>i.unitCost) * (items.length>=7?1.1:1),   // big lines strain production
+    productObj:  PRODUCTS.find(p=>p.id===dominant('product')),
+    paletteObj:  PALETTES.find(p=>p.id===dominant('palette')),
+    logoObj:     LOGOS.find(l=>l.id===dominant('logo')),
+    graphicsObj: GRAPHICS.find(g=>g.id===dominant('graphics')),
+    fitObj:      FITS.find(f=>f.id===dominant('fit')),
+    packagingObj:PACKAGING.find(p=>p.id===dominant('packaging')),
+    qty: (G.readyDrop&&G.readyDrop.qty)||250, price:(G.readyDrop&&G.readyDrop.price)||PRODUCTS.find(p=>p.id===dominant('product')).retail,
+    limit:(G.readyDrop&&G.readyDrop.limit)||'none',
+    revealed: G.colRevealed||false,
+  };
+}
+
+/* Collection reveal: show the world before you sell to it. */
+function revealCollection(){
+  const col = G.readyDrop;
+  if(!col || G.colRevealed) return;
+  G.colRevealed = true; col.revealed = true;
+  const score = col.quality + col.synergy/25;
+  const gain = clamp(3 + col.quality*0.6 + col.synergy/40 + col.pieces*0.4, 3, 16);
+  G.hype = clamp(G.hype+gain, 0, 100);
+  const pool = score>=10? [`THEY COOKED. every piece in "${col.name}" is a keeper`,`the "${col.name}" preview broke my group chat. need that ${col.productObj.name.toLowerCase()}`,`cohesion is INSANE. this is a real collection, not a merch dump`]
+    : score>=7.5? [`"${col.name}" looks promising ngl`,`need that ${col.productObj.name.toLowerCase()} from the preview`,`solid preview. wallet is nervous`]
+    : [`not feeling the colours on "${col.name}" tbh`,`the preview is... fine? expected more`,`some pieces hit, some clearly padding`];
+  for(let i=0;i<Math.min(3,pool.length);i++) feedPost(score>=10?'hot':'', pick(HANDLES), pool[i]);
+  feedPost('press','DROPFEED', `${G.brand} just revealed "${col.name}" — ${col.pieces} piece${col.pieces>1?'s':''}, dropping soon. The comments are already fighting.`);
+  toast(`Collection revealed — +${gain.toFixed(1)} hype`, 'gold');
   saveGame(); renderAll();
 }
 
@@ -127,8 +202,9 @@ const REVIEW_KNOCK = {
   exclusivity:'a run size that dilutes the moment', hype:'a launch that arrived to a quiet room',
 };
 function generateReview(col, sim, price, hypeAt){
+  const synAdj = col.synergy!==undefined? (col.synergy-55)/45 : 0;   // cohesion is design language
   const S = {
-    design:      clamp(col.quality*0.62 + (col.theme===G.trend.theme?1.4:0) + (col.staleTheme?-1.4:0) - (sim.fatigue||0)*4 + rand(0,1.6), 1, 10),
+    design:      clamp(col.quality*0.62 + (col.theme===G.trend.theme?1.4:0) + (col.staleTheme?-1.4:0) - (sim.fatigue||0)*4 + synAdj + rand(0,1.6), 1, 10),
     quality:     clamp(col.quality + rand(-0.5,0.5), 1, 10),
     value:       clamp(8 - Math.max(0,(price/col.productObj.retail-1))*5.5 + (col.quality-5.5)*0.55, 1, 10),
     packaging:   clamp({poly:4.5, box:8.6, eco:7.2}[col.packaging] + rand(-0.5,1), 1, 10),
@@ -153,7 +229,7 @@ function generateReview(col, sim, price, hypeAt){
 /* ---------------- launch ---------------- */
 function launchDrop(){
   const col = G.readyDrop;
-  if(!col) return;
+  if(!col || !col.items || !col.items.length){ toast('Assemble a collection from the vault first'); return; }
   if(G.droppedThisWeek){ toast('Already dropped this week — advance the week'); return; }
   const qty = col.qty, price = col.price;
   const prodCost = Math.round(col.unitCost * qty * (G.eventMods.nextDropCost||1));
@@ -225,8 +301,18 @@ function launchDrop(){
     // v1.3 living-fashion data
     season: s.id, trendTags,
     attrs: {product:col.product, palette:col.palette, fit:col.fit, graphics:col.graphics, logo:col.logo},
+    // v1.4 collection data
+    pieces: col.pieces, synergy: col.synergy, originality: col.originality,
+    items: col.items.map(i=>({name:i.name, product:PRODUCTS.find(p=>p.id===i.product).name, quality:i.quality, timeless:i.timeless})),
+    sizeType: sizeLabel(col.pieces),
+    story: `"${col.name}" — a ${s.name.toLowerCase()} ${sizeLabel(col.pieces).toLowerCase()} exploring ${col.theme.toLowerCase()} across ${col.pieces} piece${col.pieces>1?'s':''}.`,
   };
   G.drops.push(record);
+  // the vault pieces are spent — they live in the archive now
+  const usedIds = col.items.map(i=>i.id);
+  G.vault = G.vault.filter(v=>!usedIds.includes(v.id));
+  G.colSel = []; G.colName = ''; G.colRevealed = false;
+  checkAwards(record);
   G.history.revenue.push({name:col.name, v:revenue});
   if(G.history.revenue.length>10) G.history.revenue.shift();
   G.readyDrop = null;
@@ -342,6 +428,21 @@ function applyDropConsequences(col, qty, price, sim, profit){
   if(col.theme===G.trend.theme || col.product===G.trend.product) F.push(['On trend', 'trend alignment pulled in the hype crowd', 'good']);
   if(hypeAtLaunch<20) F.push(['Low hype at launch', 'you dropped to a quiet room — marketing before launching matters', 'bad']);
   else if(hypeAtLaunch>=60) F.push(['Launched hot', `hype at ${Math.round(hypeAtLaunch)} put this in front of everyone`, 'good']);
+
+  // --- collection format shapes the outcome ---
+  if(col.pieces){
+    if(col.capsule && sim.soldOut && col.quality>=6.5){
+      G.prestige = clamp(G.prestige + rand(0.8,1.6), 0, 100);
+      F.push(['Capsule exclusivity', 'a tiny, excellent release — collectors and prestige love this format', 'good']);
+    }
+    if(col.pieces>=7){
+      if(sim.soldOut){ G.followers += Math.round((sim.followerGain||0)*0.15); F.push(['Seasonal statement', 'a full coordinated line lands like an event — extra reach', 'good']); }
+      else { G.reputation = clamp(G.reputation-2,0,100); F.push(['Overreached', 'a big line that didn\'t sell out reads as hubris', 'bad']); }
+    }
+    if(col.synergy>=80) F.push(['Curated', `synergy ${col.synergy}/100 — the pieces speak the same language`, 'good']);
+    else if(col.synergy<40 && col.pieces>=3) F.push(['Mismatched', `synergy ${col.synergy}/100 — critics call it a merch dump, not a collection`, 'bad']);
+    if(col.revealed) F.push(['Pre-release reveal', 'anticipation was built before launch day', 'good']);
+  }
 
   // --- product fatigue: repetition bores the whole market ---
   if((sim.fatigue||0)>0.08){

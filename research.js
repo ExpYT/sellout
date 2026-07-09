@@ -15,6 +15,7 @@ const RESEARCH = [
   {id:'shipping',     name:'Shipping Deal',         cost:5000,  weeks:2, desc:'Faster delivery: +8 customer satisfaction after every drop.'},
   {id:'forecasting',  name:'Trend Analytics Desk',  cost:6000,  weeks:2, desc:'Sharper trend forecasts on the Trends page (±8 instead of ±16).'},
   {id:'trendlab',     name:'Fashion Intelligence Lab', cost:15000, weeks:3, desc:'Near-precise forecasts (±3). See the wave before anyone surfs it.'},
+  {id:'creative',     name:'Creative Process Studio',  cost:8000,  weeks:2, desc:'Better rituals, less grind: designing causes noticeably less burnout.'},
 ];
 
 function startResearch(id){
